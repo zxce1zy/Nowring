@@ -1,0 +1,76 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Version
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $v = $env:GITHUB_REF_NAME.TrimStart('v') } else { $v = '0.0.0-dev' }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build Nowring.exe
+        run: dotnet publish -c Release -o out -p:Version=${{ steps.ver.outputs.version }}
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $paths = @(
+            "C:\Program Files (x86)\Inno Setup 7\ISCC.exe", "C:\Program Files\Inno Setup 7\ISCC.exe",
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe", "C:\Program Files\Inno Setup 6\ISCC.exe")
+          $iscc = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) { throw "ISCC.exe not found" }
+          & $iscc "/DMyAppVersion=${{ steps.ver.outputs.version }}" installer\Nowring.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+
+      - name: Portable zip
+        shell: pwsh
+        run: Compress-Archive -Path out\* -DestinationPath dist\Nowring-portable.zip
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem dist\Nowring-Setup-*.exe, dist\Nowring-portable.zip | ForEach-Object { $_.FullName }
+          $files | ForEach-Object {
+            $h = (Get-FileHash $_ -Algorithm SHA256).Hash.ToLower()
+            "$h  $(Split-Path $_ -Leaf)"
+          } | Out-File dist\SHA256SUMS.txt -Encoding ascii
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nowring
+          path: |
+            dist/Nowring-Setup-*.exe
+            dist/Nowring-portable.zip
+            dist/SHA256SUMS.txt
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/Nowring-Setup-*.exe
+            dist/Nowring-portable.zip
+            dist/SHA256SUMS.txt
