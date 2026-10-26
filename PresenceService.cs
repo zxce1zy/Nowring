@@ -104,6 +104,11 @@ sealed class PresenceService
         return m == null ? t : t with { Artists = Lookup.MergeArtists(t.Artist, m.Artists), Url = Lookup.UrlFor(m, t) };
     }
 
+    // Сайт в браузере (Яндекс Музыка / SoundCloud) определяется не сразу: если не нашли,
+    // пробуем ещё несколько раз с паузой, пока трек играет.
+    int _browserTries;
+    string? _browserKey;
+
     string StateKey(TrackInfo t) => t.Key + (_s.Covers ? "+c" : "");
 
     async Task RefreshAsync()
@@ -113,6 +118,13 @@ sealed class PresenceService
         {
             var t = Merge(await _watcher.SnapshotAsync(_s));
             Current = t;
+
+            if (t != null && t.Key != _browserKey) { _browserKey = t.Key; _browserTries = 0; }
+            if (t != null && t.Source == "browser" && _browserTries < 6)
+            {
+                _browserTries++;
+                _ = Task.Delay(3500).ContinueWith(_ => Schedule());
+            }
 
             if (!_s.HasClientId) return;
 

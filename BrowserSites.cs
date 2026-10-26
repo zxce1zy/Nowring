@@ -14,6 +14,7 @@ namespace Nowring;
 static class BrowserSites
 {
     static readonly Dictionary<string, string> Cache = new();
+    static readonly Dictionary<string, DateTime> Neg = new();   // «не нашли»: не кэшируем надолго
 
     public static string Detect(string aumid, string title, string artist)
     {
@@ -21,6 +22,8 @@ static class BrowserSites
         lock (Cache)
         {
             if (Cache.TryGetValue(key, out var c)) return c;
+            // не нашли пару секунд назад: не сканируем вкладки снова при каждом событии
+            if (Neg.TryGetValue(key, out var at) && (DateTime.UtcNow - at).TotalSeconds < 3) return "browser";
         }
 
         string site;
@@ -30,7 +33,10 @@ static class BrowserSites
         lock (Cache)
         {
             if (Cache.Count > 60) Cache.Clear();
-            Cache[key] = site;
+            if (Neg.Count > 60) Neg.Clear();
+            // «browser» запоминаем только на пару секунд: Chrome отдаёт список вкладок не сразу,
+            // а позже (иначе один неудачный просмотр навсегда оставлял «Слушает Nowring»)
+            if (site == "browser") Neg[key] = DateTime.UtcNow; else Cache[key] = site;
         }
         return site;
     }
@@ -73,6 +79,7 @@ static class BrowserSites
         }
         if (yandex && !soundcloud) return "yandex";
         if (soundcloud && !yandex) return "soundcloud";
+        Log.Write("Сайт в браузере не определён (найдено названий вкладок и окон: " + names.Count + ")");
         return "browser";
     }
 
