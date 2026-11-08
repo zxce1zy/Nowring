@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,9 @@ static class Program
     [STAThread]
     static void Main()
     {
+        // форматирование чисел и дат как раньше (без запятых вместо точек), независимо от языка Windows
+        CultureInfo.DefaultThreadCurrentCulture = CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+        Thread.CurrentThread.CurrentCulture = Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Fatal(e.ExceptionObject as Exception, false);
         try
         {
@@ -56,7 +60,8 @@ static class Program
 sealed class App : Application
 {
     Forms.NotifyIcon? _tray;
-    Forms.ToolStripMenuItem _darkItem = null!, _lightItem = null!, _enabledItem = null!;
+    Forms.ToolStripMenuItem _enabledItem = null!;
+    Forms.ToolStripMenuItem _updateItem = null!;
     Drawing.Icon _iconOn = null!, _iconOff = null!;
     bool _trayOn = true;
     MainWindow? _win;
@@ -81,7 +86,7 @@ sealed class App : Application
         _s.Autostart = Autostart.IsEnabled();
         if (_s.Autostart) Autostart.Set(true);
 
-        Theme.Apply(_s.Dark);
+        Theme.Apply(_s.Dark, _s.Accent);
         _svc = new PresenceService(_s);
 
         _iconOn = MakeIcon(true);
@@ -97,7 +102,6 @@ sealed class App : Application
             ContextMenuStrip = BuildMenu()
         };
         _tray.MouseClick += (_, a) => { if (a.Button == Forms.MouseButtons.Left) ShowWindow(); };
-        Theme.Changed += UpdateThemeItems;
         _svc.Updated += () => Dispatcher.BeginInvoke(new Action(SyncIcon));
 
         Task.Run(_svc.StartAsync);
@@ -111,6 +115,8 @@ sealed class App : Application
         // При обычном запуске (ярлык, Пуск, установщик) окно показывается всегда.
         bool hidden = Array.Exists(e.Args, a => a.Equals("--hidden", StringComparison.OrdinalIgnoreCase));
         if (!hidden || !_s.HasClientId) ShowWindow();
+        Updater.Changed += () => Dispatcher.BeginInvoke(new Action(SyncUpdateItem));
+        _ = Updater.LoopAsync(_s);
         Started = true;
         Dispatcher.BeginInvoke(new Action(Trim), DispatcherPriority.ApplicationIdle);
     }
@@ -147,15 +153,13 @@ sealed class App : Application
         _enabledItem.Click += (_, _) => ToggleEnabled();
         m.Items.Add(_enabledItem);
         m.Items.Add("Журнал ошибок", null, (_, _) => Log.Open());
-
-        var themeRoot = new Forms.ToolStripMenuItem("Тема");
-        _darkItem = new Forms.ToolStripMenuItem();
-        _lightItem = new Forms.ToolStripMenuItem();
-        _darkItem.Click += (_, _) => SetTheme(true);
-        _lightItem.Click += (_, _) => SetTheme(false);
-        themeRoot.DropDownItems.Add(_darkItem);
-        themeRoot.DropDownItems.Add(_lightItem);
-        m.Items.Add(themeRoot);
+        _updateItem = new Forms.ToolStripMenuItem("Обновить") { Visible = false };
+        _updateItem.Click += (_, _) =>
+        {
+            if (Updater.ReadyPath != null) { if (Updater.Install()) Shutdown(); }
+            else { try { Process.Start(new ProcessStartInfo(Updater.ReleasesUrl) { UseShellExecute = true }); } catch { } }
+        };
+        m.Items.Add(_updateItem);
 
         m.Items.Add(new Forms.ToolStripSeparator());
         m.Items.Add("Выйти", null, (_, _) => Shutdown());
@@ -163,12 +167,8 @@ sealed class App : Application
         // пункты повыше, чтобы закруглённая подсветка смотрелась аккуратно
         foreach (var it in m.Items)
             if (it is Forms.ToolStripMenuItem mi) mi.Padding = new Forms.Padding(4, 4, 4, 4);
-        foreach (Forms.ToolStripItem it in themeRoot.DropDownItems)
-            it.Padding = new Forms.Padding(4, 4, 4, 4);
 
         m.Opened += (_, _) => { UpdateEnabledItem(); Round(m.Handle); };
-        themeRoot.DropDown.Opened += (_, _) => Round(themeRoot.DropDown.Handle);
-        UpdateThemeItems();
         UpdateEnabledItem();
         return m;
     }
@@ -188,6 +188,14 @@ sealed class App : Application
         _svc.Schedule();
     }
 
+    void SyncUpdateItem()
+    {
+        var v = Updater.LatestVersion;
+        _updateItem.Visible = v != null;
+        if (v != null)
+            _updateItem.Text = Updater.ReadyPath != null ? "Обновить до " + v : "Доступна версия " + v + " (открыть)";
+    }
+
     void UpdateEnabledItem() =>
         _enabledItem.Text = (_s.Enabled ? "✓  " : "     ") + "Статус активности";
 
@@ -198,20 +206,6 @@ sealed class App : Application
         _trayOn = _s.Enabled;
         _tray.Icon = _trayOn ? _iconOn : _iconOff;
         _tray.Text = _trayOn ? "Nowring" : "Nowring (статус выключен)";
-    }
-
-    void SetTheme(bool dark)
-    {
-        if (_s.Dark == dark) return;
-        _s.Dark = dark;
-        _s.Save();
-        Theme.Apply(dark);
-    }
-
-    void UpdateThemeItems()
-    {
-        _darkItem.Text = (Theme.Dark ? "✓  " : "     ") + "Тёмная";
-        _lightItem.Text = (Theme.Dark ? "     " : "✓  ") + "Светлая";
     }
 
     // Обычное окно: перетаскивается, сворачивается, есть на панели задач. Создаётся при открытии,

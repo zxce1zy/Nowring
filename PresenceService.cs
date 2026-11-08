@@ -97,9 +97,26 @@ sealed class PresenceService
     }
 
     /// <summary>Добавляет к треку то, что узнали из Deezer / song.link (все артисты, ссылка).</summary>
+    TrackInfo? CustomTrack(bool musicOn)
+    {
+        if (!_s.CustomOn || (!_s.CustomOver && musicOn)) return null;
+        var title = _s.CustomTitle.Trim();
+        var text = _s.CustomText.Trim();
+        if (title.Length == 0 && text.Length == 0) return null;
+        if (title.Length == 0) { title = text; text = ""; }
+        var img = _s.CustomImage ?? "";
+        var token = img;
+        if (img.StartsWith("file:")) { try { token += File.GetLastWriteTimeUtc(img[5..]).Ticks; } catch { } }
+        var now = DateTimeOffset.Now;
+        var pos = _s.CustomTimer && _s.CustomStart > 0 ? now - DateTimeOffset.FromUnixTimeSeconds(_s.CustomStart) : TimeSpan.Zero;
+        if (pos < TimeSpan.Zero) pos = TimeSpan.Zero;
+        return new TrackInfo(CoverCache.Key("custom", token, ""), title, text, "", "custom", true, pos, TimeSpan.Zero, now,
+            () => Templates.LoadAsync(img));
+    }
+
     static TrackInfo? Merge(TrackInfo? t)
     {
-        if (t == null) return null;
+        if (t == null || t.Source == "custom") return t;
         var m = Lookup.Get(t.Key);
         return m == null ? t : t with { Artists = Lookup.MergeArtists(t.Artist, m.Artists), Url = Lookup.UrlFor(m, t) };
     }
@@ -116,7 +133,8 @@ sealed class PresenceService
         await _gate.WaitAsync();
         try
         {
-            var t = Merge(await _watcher.SnapshotAsync(_s));
+            var music = await _watcher.SnapshotAsync(_s);
+            var t = Merge(CustomTrack(music != null) ?? music);
             Current = t;
 
             if (t != null && t.Key != _browserKey) { _browserKey = t.Key; _browserTries = 0; }
@@ -151,7 +169,7 @@ sealed class PresenceService
 
             string? url = _s.Covers ? CoverCache.GetUrl(t.Key) : null;
             bool need;
-            lock (_cf) need = !_resolved.Contains(StateKey(t)) || (_s.Covers && url == null);
+            lock (_cf) need = !_resolved.Contains(StateKey(t)) || (_s.Covers && url == null && t.Source != "custom");
             if (need)
             {
                 var running = StartResolve(t);
@@ -170,7 +188,7 @@ sealed class PresenceService
             }
 
             long start = t.Playing ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() - (long)t.Position.TotalSeconds : 0;
-            string sig = $"{t.Key}|{t.Source}|{t.Playing}|{url}|{t.ArtistsStatus}|{t.Url}|{_degrade}|{_s.ShowButton}|{(t.Playing ? "" : ((int)t.Position.TotalSeconds).ToString())}";
+            string sig = $"{t.Key}|{t.Title}|{t.Source}|{t.Playing}|{url}|{t.ArtistsStatus}|{t.Url}|{_degrade}|{_s.ShowButton}|{_s.VideoAsMusic}|{(t.Playing ? "" : ((int)t.Position.TotalSeconds).ToString())}";
             if (sig == _lastSig && (!t.Playing || Math.Abs(start - _lastStart) <= 2)) return;
 
             // у каждого источника своё приложение Discord (от этого зависит «Слушает Spotify»)
@@ -212,7 +230,7 @@ sealed class PresenceService
 
         string state;
         if (t.Playing)
-            state = artists.Length > 0 ? artists : Fmt.SourceName(t.Source);
+            state = artists.Length > 0 ? artists : t.Source == "custom" ? "" : Fmt.SourceName(t.Source);
         else
         {
             state = "⏸ " + Fmt.Time(t.Position);
@@ -222,12 +240,12 @@ sealed class PresenceService
 
         var act = new Dictionary<string, object>
         {
-            ["type"] = 2,
+            ["type"] = t.Source == "custom" ? 0 : !_s.VideoAsMusic && t.Source == "youtube" ? 3 : 2,
             ["details"] = Clip(t.Title),
             ["state"] = Clip(state)
         };
 
-        if (t.Playing)
+        if (t.Playing && !(t.Source == "custom" && !_s.CustomTimer))
         {
             var ts = new Dictionary<string, object> { ["start"] = start };
             if (t.Duration > TimeSpan.Zero) ts["end"] = start + (long)t.Duration.TotalSeconds;
@@ -354,38 +372,44 @@ static class CoverCache
     public static async Task<bool> ResolveAsync(TrackInfo t, bool covers, Action partial)
     {
         Directory.CreateDirectory(Dir);
+        var path = Path.Combine(Dir, t.Key + ".jpg");
 
-        // 1. Deezer + song.link (кэшируется на время работы программы)
+        // 1. Обложка прямо с устройства (из плеера/файла)
+        byte[]? raw = null;
+        try { raw = await t.LoadThumb(); } catch { }
+        if (raw != null)
+        {
+            try
+            {
+                await File.WriteAllBytesAsync(path, Shrink(raw));
+                Prune();
+            }
+            catch (Exception ex) { Log.Write("Обложка с устройства: " + ex.Message); }
+        }
+
+        // 2. Данные о треке (все исполнители, ссылки) ищем всегда, даже если обложка уже есть:
+        // плеер отдаёт только первого исполнителя, а фиты видны только в каталогах
         var meta = Lookup.Get(t.Key);
         if (meta == null)
         {
-            meta = await Lookup.ResolveAsync(t);
+            // видео (YouTube) и свой статус не ищем в музыкальных каталогах
+            meta = t.Source is "youtube" or "custom" ? TrackMeta.Empty : await Lookup.ResolveAsync(t);
             Lookup.Put(t.Key, meta);
         }
+        partial();   // исполнители уже можно показывать
 
-        // 2. прямая ссылка на обложку: Discord показывает её сразу
-        if (covers && GetUrl(t.Key) == null && meta.CoverUrl != null) SetUrl(t.Key, meta.CoverUrl);
-        partial();
-
-        // 3. локальная копия для окна (из Windows media session)
-        var path = Path.Combine(Dir, t.Key + ".jpg");
-        if (!File.Exists(path))
+        // 3. Обложка для Discord: с устройства, иначе из каталога
+        if (covers && GetUrl(t.Key) == null)
         {
-            var raw = await t.LoadThumb();
-            if (raw != null)
+            if (File.Exists(path))
             {
-                try { await File.WriteAllBytesAsync(path, Shrink(raw)); Prune(); }
-                catch (Exception ex) { Log.Write("Обложка: " + ex.Message); }
+                var up = await UploadAsync(path);
+                if (up != null) SetUrl(t.Key, up.Value.Url, up.Value.Exp);
             }
+            if (GetUrl(t.Key) == null && meta.CoverUrl != null) SetUrl(t.Key, meta.CoverUrl);
         }
 
-        if (!covers || GetUrl(t.Key) != null) return true;
-
-        // 4. нет в Deezer (например, скачанный файл): загружаем настоящую обложку на файлообменник
-        if (!File.Exists(path)) { Log.Write("Нет обложки от плеера для: " + t.Title); return false; }
-        var up = await UploadAsync(path);
-        if (up == null) return false;
-        SetUrl(t.Key, up.Value.Url, up.Value.Exp);
+        partial();
         return true;
     }
 

@@ -15,6 +15,10 @@ static class Config
     public const string YandexClientId = "1563946352436580473";
     public const string SoundCloudClientId = "1563946689797029959";
 
+    // YouTube / Telegram: приложения Discord с такими же названиями.
+    public const string YouTubeClientId = "1568775465101959260";
+    public const string TelegramClientId = "1568775817691922543";
+
     public const string GitHubUrl = "https://github.com/zxce1zy";
 
     public static string ForSource(string source) => source switch
@@ -22,6 +26,8 @@ static class Config
         "spotify" => SpotifyClientId,
         "yandex" => YandexClientId,
         "soundcloud" => SoundCloudClientId,
+        "youtube" => YouTubeClientId,
+        "telegram" => TelegramClientId,
         _ => ""
     };
 }

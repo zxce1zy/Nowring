@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -16,6 +17,9 @@ public partial class MainWindow : Window
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     string? _coverKey, _lastTrackKey;
     bool _closing, _closeDone;
+    string? _status;
+    bool _init = true;
+    readonly DispatcherTimer _customDebounce = new() { Interval = TimeSpan.FromMilliseconds(500) };
 
     static readonly Brush Green = Frozen(0x3B, 0xA5, 0x5D);
     static readonly Brush Gray = Frozen(0x6B, 0x6B, 0x76);
@@ -48,16 +52,51 @@ public partial class MainWindow : Window
 
         SpotifyCb.IsChecked = s.Spotify;
         YandexCb.IsChecked = s.Yandex;
+        SoundCloudCb.IsChecked = s.SoundCloud;
+        YouTubeCb.IsChecked = s.YouTube;
+        TelegramCb.IsChecked = s.Telegram;
         BrowserCb.IsChecked = s.Browser;
         EnabledCb.IsChecked = s.Enabled;
         ButtonCb.IsChecked = s.ShowButton;
+        VideoMusicCb.IsChecked = s.VideoAsMusic;
         CoversCb.IsChecked = s.Covers;
         DarkCb.IsChecked = s.Dark;
         AutostartCb.IsChecked = s.Autostart;
+        AutoUpdCb.IsChecked = s.AutoUpdate;
+
+        CustomOnCb.IsChecked = s.CustomOn;
+        CustomOverCb.IsChecked = s.CustomOver;
+        CustomTimerCb.IsChecked = s.CustomTimer;
+        CustomTitleBox.Text = s.CustomTitle;
+        CustomTextBox.Text = s.CustomText;
+        UpdatePreview();
+        foreach (var t in Templates.All)
+        {
+            var b = new Button
+            {
+                Tag = t,
+                Margin = new Thickness(0, 0, 8, 8),
+                Content = new TextBlock { Text = t.Emoji + "  " + t.Name }
+            };
+            b.Click += OnTemplate;
+            TplPanel.Children.Add(b);
+        }
+        BuildAccentPicker();
+        foreach (var tb in new[] { CustomTitleBox, CustomTextBox })
+            tb.PreviewMouseLeftButtonDown += (s2, _) => { if (s2 is TextBox x && !x.IsKeyboardFocusWithin) System.Windows.Input.Keyboard.Focus(x); };
+        StateChanged += (_, _) =>
+        {
+            bool min = WindowState == WindowState.Minimized;
+            HomeBg.Visibility = min ? Visibility.Collapsed : Visibility.Visible;   // свёрнуто: фон не рисуем
+            if (!min && !_closing) PlayIn();
+        };
+        HomeBg.SizeChanged += (_, e) =>
+            HomeBg.Clip = new RectangleGeometry(new Rect(0, 0, e.NewSize.Width, e.NewSize.Height), 11, 11);
+        _customDebounce.Tick += (_, _) => { _customDebounce.Stop(); ApplyCustomText(); };
+        _init = false;
 
         Loaded += (_, _) =>
         {
-            // позиция: где окно стояло в прошлый раз, иначе по центру экрана
             var wa = SystemParameters.WorkArea;
             double vl = SystemParameters.VirtualScreenLeft, vt = SystemParameters.VirtualScreenTop;
             double vw = SystemParameters.VirtualScreenWidth, vh = SystemParameters.VirtualScreenHeight;
@@ -73,19 +112,19 @@ public partial class MainWindow : Window
                 Top = wa.Top + (wa.Height - ActualHeight) / 2;
             }
 
-            // появление: плавно проявляется и выезжает снизу
             Root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
             SlideT.BeginAnimation(TranslateTransform.YProperty,
                 new DoubleAnimation(16, 0, TimeSpan.FromMilliseconds(240)) { EasingFunction = Ease });
 
             _svc.Updated += OnUpdated;
             Theme.Changed += SyncTheme;
+            Updater.Changed += OnUpdaterChanged;
+            SyncUpdate();
             _timer.Tick += (_, _) => RenderProgress();
             _timer.Start();
             Render();
         };
 
-        // закрытие: сначала анимация, потом настоящее закрытие
         Closing += (_, e) =>
         {
             if (_closeDone) return;
@@ -104,16 +143,30 @@ public partial class MainWindow : Window
         {
             _svc.Updated -= OnUpdated;
             Theme.Changed -= SyncTheme;
+            Updater.Changed -= OnUpdaterChanged;
             _timer.Stop();
             CoverBrush.ImageSource = null;
         };
+    }
+
+    private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.Source is TabControl)
+        {
+            var presenter = FindName("TabContentPresenter") as UIElement;
+            if (presenter != null)
+            {
+                var fadeIn = new DoubleAnimation(0.3, 1.0, TimeSpan.FromMilliseconds(180));
+                presenter.BeginAnimation(OpacityProperty, fadeIn);
+            }
+        }
     }
 
     void SavePosition()
     {
         try
         {
-            var b = RestoreBounds;   // верно и для свёрнутого окна
+            var b = RestoreBounds;
             if (double.IsNaN(b.Left) || double.IsNaN(b.Top) || double.IsInfinity(b.Left) || double.IsInfinity(b.Top)) return;
             _s.WinLeft = b.Left;
             _s.WinTop = b.Top;
@@ -128,7 +181,103 @@ public partial class MainWindow : Window
         try { DragMove(); } catch { }
     }
 
-    void OnMin(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    bool _minimizing;
+
+    // сворачивание: плавно гасим окно и только потом сворачиваем
+    void OnMin(object sender, RoutedEventArgs e)
+    {
+        if (_minimizing || _closing) return;
+        _minimizing = true;
+        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(170));
+        fade.Completed += (_, _) => { _minimizing = false; WindowState = WindowState.Minimized; };
+        Root.BeginAnimation(OpacityProperty, fade);
+        SlideT.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(26, TimeSpan.FromMilliseconds(170)) { EasingFunction = Ease });
+    }
+
+    // разворачивание: окно плавно выплывает
+    void PlayIn()
+    {
+        Root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
+        SlideT.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(26, 0, TimeSpan.FromMilliseconds(280)) { EasingFunction = Ease });
+    }
+
+    // ---------- обновления ----------
+
+    void OnUpdaterChanged() => Dispatcher.BeginInvoke(new Action(SyncUpdate));
+
+    void SyncUpdate()
+    {
+        if (_closeDone) return;
+        UpdStatus.Text = Updater.Status;
+        UpdBtn.IsEnabled = !Updater.Busy;
+        var v = Updater.LatestVersion;
+        UpdateBar.Visibility = v != null ? Visibility.Visible : Visibility.Collapsed;
+        if (v == null) return;
+        bool ready = Updater.ReadyPath != null;
+        UpdText.Text = "Доступна версия " + v;
+        UpdNow.Content = ready ? "Обновить" : Updater.Installed ? "Скачивается…" : "Скачать";
+        UpdNow.IsEnabled = ready || !Updater.Installed;
+    }
+
+    void OnCheckUpdate(object sender, RoutedEventArgs e) => _ = Updater.CheckAsync(true);
+
+    void OnUpdateNow(object sender, RoutedEventArgs e)
+    {
+        if (Updater.ReadyPath != null)
+        {
+            if (Updater.Install()) Application.Current.Shutdown();
+        }
+        else Open(Updater.ReleasesUrl);
+    }
+
+    // ---------- справка и отзыв / GitHub ----------
+
+    const string RepoUrl = "https://github.com/zxce1zy/Nowring";
+
+    static void Open(string target)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target) { UseShellExecute = true }); }
+        catch { }
+    }
+
+    void OnGitHub(object sender, RoutedEventArgs e) => Open(RepoUrl);
+
+    void OnHelp(object sender, RoutedEventArgs e)
+    {
+        if (sender is not UIElement anchor) return;
+        var popup = new Popup
+        {
+            PlacementTarget = anchor, Placement = PlacementMode.Top, StaysOpen = false,
+            AllowsTransparency = true, VerticalOffset = -6, PopupAnimation = PopupAnimation.Fade
+        };
+        var box = new StackPanel { Width = 250 };
+        void Item(string text, Action act)
+        {
+            var b = new Button { Content = new TextBlock { Text = text }, Margin = new Thickness(0, 2, 0, 2) };
+            b.Click += (_, _) => { popup.IsOpen = false; act(); };
+            box.Children.Add(b);
+        }
+        Item("🐞  Сообщить о проблеме", () => Open(RepoUrl + "/issues/new?title=" + Uri.EscapeDataString("Проблема: ")));
+        Item("💡  Предложить идею", () => Open(RepoUrl + "/issues/new?title=" + Uri.EscapeDataString("Идея: ")));
+        Item("📄  Открыть журнал ошибок", () => Log.Open());
+        Item("📋  Скопировать данные для отчёта", () =>
+        {
+            try
+            {
+                Clipboard.SetText("Nowring 2.0 · " + Environment.OSVersion.VersionString + " · .NET " + Environment.Version);
+            }
+            catch { }
+        });
+        Item("⭐  Страница на GitHub", () => Open(RepoUrl));
+        var card = new Border { Padding = new Thickness(8), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Margin = new Thickness(8), Child = box };
+        card.SetResourceReference(Border.BackgroundProperty, "Panel");
+        card.SetResourceReference(Border.BorderBrushProperty, "Edge");
+        card.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, ShadowDepth = 2, Opacity = 0.45, Color = Colors.Black };
+        popup.Child = card;
+        popup.IsOpen = true;
+    }
 
     void OnClose(object sender, RoutedEventArgs e) => Close();
 
@@ -156,6 +305,12 @@ public partial class MainWindow : Window
             DiscordText.Text = _svc.DiscordConnected ? "Discord подключён" : "Discord не найден";
         }
 
+        if (_status != DiscordText.Text)
+        {
+            _status = DiscordText.Text;
+            ShowStatus();
+        }
+
         if (t == null)
         {
             TitleText.Text = "Ничего не играет";
@@ -164,6 +319,7 @@ public partial class MainWindow : Window
             Hint.Visibility = Visibility.Collapsed;
             CoverBrush.ImageSource = null;
             _coverKey = _lastTrackKey = null;
+            Theme.SetCover(null, null);
             Progress.BeginAnimation(RangeBase.ValueProperty, null);
             Progress.Value = 0;
             PosText.Text = DurText.Text = "";
@@ -189,8 +345,22 @@ public partial class MainWindow : Window
             _coverKey = img != null ? t.Key : null;
             if (img != null)
                 CoverBrush.BeginAnimation(Brush.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300)));
+            var cc = img != null ? CoverColors(img) : null;
+            Theme.SetCover(cc?.Main, cc?.Second);
         }
         RenderProgress();
+    }
+
+    void ShowStatus()
+    {
+        var x = new DoubleAnimationUsingKeyFrames();
+        x.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        x.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(400)), Ease));
+        x.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(3000))));
+        x.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(3500)), Ease));
+        var o = x.Clone();
+        StatusScale.BeginAnimation(ScaleTransform.ScaleXProperty, x);
+        StatusWrap.BeginAnimation(OpacityProperty, o);
     }
 
     void RenderProgress()
@@ -206,13 +376,62 @@ public partial class MainWindow : Window
         double v = t.Duration > TimeSpan.Zero ? Math.Clamp(pos / t.Duration, 0, 1) : 0;
         if (!t.Playing || Math.Abs(v - Progress.Value) > 0.03)
         {
-            Progress.BeginAnimation(RangeBase.ValueProperty, null);   // перемотка / смена трека: сразу
+            Progress.BeginAnimation(RangeBase.ValueProperty, null);
             Progress.Value = v;
         }
         else
         {
             Progress.BeginAnimation(RangeBase.ValueProperty, new DoubleAnimation(v, TimeSpan.FromMilliseconds(1000)));
         }
+    }
+
+    /// <summary>Два самых «цветных» оттенка обложки (для фона главной).</summary>
+    static (Color Main, Color? Second)? CoverColors(BitmapSource src)
+    {
+        try
+        {
+            var small = new TransformedBitmap(src, new ScaleTransform(32.0 / src.PixelWidth, 32.0 / src.PixelHeight));
+            var conv = new FormatConvertedBitmap(small, PixelFormats.Bgra32, null, 0);
+            int w = conv.PixelWidth, h = conv.PixelHeight, n = w * h;
+            var px = new byte[n * 4];
+            conv.CopyPixels(px, w * 4, 0);
+
+            var sr = new double[12]; var sg = new double[12]; var sb = new double[12]; var sw = new double[12];
+            double ar = 0, ag = 0, ab = 0;
+            for (int i = 0; i < n; i++)
+            {
+                double b = px[i * 4], g = px[i * 4 + 1], r = px[i * 4 + 2];
+                ar += r; ag += g; ab += b;
+                double mxv = Math.Max(r, Math.Max(g, b)), dv = mxv - Math.Min(r, Math.Min(g, b));
+                double mx = mxv / 255.0, d = dv / 255.0;
+                if (mx < 0.2 || d < 0.15) continue;
+                double hue = (mxv == r ? ((g - b) / dv) % 6 : mxv == g ? (b - r) / dv + 2 : (r - g) / dv + 4) * 60;
+                if (hue < 0) hue += 360;
+                int k = (int)(hue / 30) % 12;
+                double wgt = d;
+                sr[k] += r * wgt; sg[k] += g * wgt; sb[k] += b * wgt; sw[k] += wgt;
+            }
+
+            int top = -1;
+            for (int k = 0; k < 12; k++) if (sw[k] > 0 && (top < 0 || sw[k] > sw[top])) top = k;
+            if (top < 0)
+            {
+                // серая обложка: берём средний цвет, чуть осветлив
+                var avg = Color.FromRgb((byte)(ar / n), (byte)(ag / n), (byte)(ab / n));
+                return (Theme.Vivid(avg), null);
+            }
+
+            Color Of(int k) => Theme.Vivid(Color.FromRgb((byte)(sr[k] / sw[k]), (byte)(sg[k] / sw[k]), (byte)(sb[k] / sw[k])));
+            int second = -1;
+            for (int k = 0; k < 12; k++)
+            {
+                int dist = Math.Min((k - top + 12) % 12, (top - k + 12) % 12);
+                if (dist < 2 || sw[k] < sw[top] * 0.25) continue;
+                if (second < 0 || sw[k] > sw[second]) second = k;
+            }
+            return (Of(top), second >= 0 ? Of(second) : null);
+        }
+        catch { return null; }
     }
 
     static BitmapImage? LoadCover(string? path)
@@ -236,10 +455,20 @@ public partial class MainWindow : Window
     {
         _s.Spotify = SpotifyCb.IsChecked == true;
         _s.Yandex = YandexCb.IsChecked == true;
+        _s.SoundCloud = SoundCloudCb.IsChecked == true;
+        _s.YouTube = YouTubeCb.IsChecked == true;
+        _s.Telegram = TelegramCb.IsChecked == true;
         _s.Browser = BrowserCb.IsChecked == true;
         _s.Covers = CoversCb.IsChecked == true;
         _s.Enabled = EnabledCb.IsChecked == true;
         _s.ShowButton = ButtonCb.IsChecked == true;
+        _s.VideoAsMusic = VideoMusicCb.IsChecked == true;
+        bool customOn = CustomOnCb.IsChecked == true;
+        if (customOn && !_s.CustomOn) _s.CustomStart = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        _s.CustomOn = customOn;
+        _s.CustomOver = CustomOverCb.IsChecked == true;
+        _s.CustomTimer = CustomTimerCb.IsChecked == true;
+        _s.AutoUpdate = AutoUpdCb.IsChecked == true;
         bool auto = AutostartCb.IsChecked == true;
         if (auto != _s.Autostart) { _s.Autostart = auto; Autostart.Set(auto); }
         bool dark = DarkCb.IsChecked == true;
@@ -248,6 +477,129 @@ public partial class MainWindow : Window
         _s.Save();
         if (themeChanged) Theme.Apply(dark);
         _svc.Schedule();
+    }
+
+    // ---------- акцентный цвет ----------
+
+    static readonly (string Name, string Hex)[] AccentColors =
+    {
+        ("Бирюзовый", "#14C9A3"), ("Синий", "#3B82F6"), ("Зелёный", "#22C55E"), ("Красный", "#EF4444"),
+        ("Оранжевый", "#F97316"), ("Жёлтый", "#EAB308"), ("Розовый", "#EC4899"), ("Фиолетовый", "#8B5CF6"),
+    };
+
+    void BuildAccentPicker()
+    {
+        AccentPanel.Children.Clear();
+        foreach (var (name, hex) in AccentColors)
+        {
+            var ring = new System.Windows.Shapes.Ellipse { Width = 36, Height = 36, StrokeThickness = 2, Stroke = Brushes.Transparent };
+            if (string.Equals(hex, _s.Accent, StringComparison.OrdinalIgnoreCase))
+                ring.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Title");
+            var dot = new System.Windows.Shapes.Ellipse
+            {
+                Width = 26, Height = 26,
+                Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex))
+            };
+            var g = new Grid
+            {
+                Width = 36, Height = 36, Margin = new Thickness(0, 0, 8, 8), Tag = hex, ToolTip = name,
+                Background = Brushes.Transparent, Cursor = System.Windows.Input.Cursors.Hand
+            };
+            g.Children.Add(ring);
+            g.Children.Add(dot);
+            g.MouseLeftButtonUp += OnAccent;
+            AccentPanel.Children.Add(g);
+        }
+    }
+
+    void OnAccent(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string hex }) return;
+        _s.Accent = hex;
+        _s.Save();
+        Theme.Apply(_s.Dark, hex);
+        BuildAccentPicker();
+    }
+
+    // ---------- свой статус ----------
+
+    void OnCustomText(object sender, TextChangedEventArgs e)
+    {
+        if (_init) return;
+        _customDebounce.Stop();
+        _customDebounce.Start();
+    }
+
+    void ApplyCustomText()
+    {
+        _s.CustomTitle = CustomTitleBox.Text;
+        _s.CustomText = CustomTextBox.Text;
+        _s.Save();
+        _svc.Schedule();
+    }
+
+    void OnTemplate(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).Tag is not Tpl t) return;
+        _customDebounce.Stop();
+        _s.CustomTitle = t.Title;
+        _s.CustomText = t.Text;
+        _s.CustomImage = "tpl:" + t.Id;
+        _s.CustomOn = true;
+        _s.CustomStart = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        _s.Save();
+        _init = true;
+        CustomTitleBox.Text = t.Title;
+        CustomTextBox.Text = t.Text;
+        CustomOnCb.IsChecked = true;
+        _init = false;
+        UpdatePreview();
+        _svc.Schedule();
+    }
+
+    void OnPickImage(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Картинка для статуса",
+            Filter = "Изображения|*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif"
+        };
+        if (dlg.ShowDialog(this) != true) return;
+        try
+        {
+            // копируем в папку программы: статус не сломается, если исходный файл удалят
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Nowring");
+            Directory.CreateDirectory(dir);
+            var dst = Path.Combine(dir, "custom_cover" + Path.GetExtension(dlg.FileName).ToLowerInvariant());
+            foreach (var old in Directory.GetFiles(dir, "custom_cover.*")) { try { File.Delete(old); } catch { } }
+            File.Copy(dlg.FileName, dst, true);
+            _s.CustomImage = "file:" + dst;
+        }
+        catch (Exception ex) { Log.Write("Своя обложка: " + ex.Message); return; }
+        _s.Save();
+        UpdatePreview();
+        _svc.Schedule();
+    }
+
+    void OnClearImage(object sender, RoutedEventArgs e)
+    {
+        _s.CustomImage = "";
+        _s.Save();
+        UpdatePreview();
+        _svc.Schedule();
+    }
+
+    void UpdatePreview()
+    {
+        var img = _s.CustomImage ?? "";
+        ImageSource? src = null;
+        try
+        {
+            if (img.StartsWith("tpl:") && Templates.Find(img[4..]) is { } t) src = Templates.Render(t);
+            else if (img.StartsWith("file:")) src = LoadCover(img[5..]);
+        }
+        catch { }
+        CustomBrush.ImageSource = src;
     }
 
     void OnHint(object sender, System.Windows.Input.MouseButtonEventArgs e)

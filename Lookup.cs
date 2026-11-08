@@ -117,11 +117,20 @@ static class Lookup
     /// </summary>
     public static string[]? MergeArtists(string player, string[]? found)
     {
+        // В приоритете всегда имя исполнителя из файла/плеера на устройстве
         var parts = Regex.Split(player, @"\s*(?:,|;|\sfeat\.?\s|\sft\.?\s)\s*", RegexOptions.IgnoreCase)
             .Select(x => x.Trim()).Where(x => x.Length > 0).ToArray();
-        if (found == null || found.Length == 0) return null;
-        if (parts.Length >= found.Length) return parts.Length > 0 ? parts : null;   // плеер уже отдал всех
-        return found.Select(d => parts.FirstOrDefault(p => Norm(p) == Norm(d)) ?? d).ToArray();
+        if (parts.Length == 0) return found;
+        if (found == null || found.Length == 0) return parts;
+
+        // доверяем каталогу, только если он нашёл того же основного исполнителя (не другой трек)
+        static string N(string x) => x.Trim().ToLowerInvariant();
+        if (!found.Any(f => parts.Any(p => N(p) == N(f)))) return parts;
+
+        var res = parts.ToList();
+        foreach (var f in found)
+            if (!res.Any(x => N(x) == N(f))) res.Add(f.Trim());
+        return res.ToArray();
     }
 
     /// <summary>Ссылка для кнопки и клика по обложке: точная, если нашли, иначе поиск на сервисе.</summary>
@@ -142,6 +151,7 @@ static class Lookup
             "spotify" => "https://open.spotify.com/search/" + q,
             "yandex" => "https://music.yandex.ru/search?text=" + q,
             "soundcloud" => "https://soundcloud.com/search?q=" + q,
+            "youtube" => "https://www.youtube.com/results?search_query=" + Uri.EscapeDataString(Trunc((t.Artist + " " + t.Title).Trim(), 100)),
             _ => null
         };
         if (fallback != null) return fallback;

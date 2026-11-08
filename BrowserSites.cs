@@ -13,35 +13,68 @@ namespace Nowring;
 /// </summary>
 static class BrowserSites
 {
-    static readonly Dictionary<string, string> Cache = new();
-    static readonly Dictionary<string, DateTime> Neg = new();   // «не нашли»: не кэшируем надолго
+    static readonly Dictionary<string, (string Site, bool Matched)> Cache = new();
+    static readonly Dictionary<string, (DateTime At, string Site, bool Matched)> Neg = new();   // «не нашли»: не кэшируем надолго
 
-    public static string Detect(string aumid, string title, string artist)
+    /// <summary>
+    /// Site: сайт, который играет. Matched: у сайта есть вкладка с названием играющего ролика/трека
+    /// (так отличаем открытое видео YouTube от превью, на которое просто навели мышь).
+    /// </summary>
+    public static (string Site, bool Matched) Detect(string aumid, string title, string artist)
     {
         var key = aumid + "|" + title + "|" + artist;
         lock (Cache)
         {
             if (Cache.TryGetValue(key, out var c)) return c;
             // не нашли пару секунд назад: не сканируем вкладки снова при каждом событии
-            if (Neg.TryGetValue(key, out var at) && (DateTime.UtcNow - at).TotalSeconds < 3) return "browser";
+            if (Neg.TryGetValue(key, out var n) && (DateTime.UtcNow - n.At).TotalSeconds < 3) return (n.Site, n.Matched);
         }
 
-        string site;
-        try { site = Scan(aumid, title); }
-        catch { return "browser"; }   // не кэшируем сбой, попробуем при следующем событии
+        (string Site, bool Matched) r;
+        try { r = Scan(aumid, title); }
+        catch { return ("browser", false); }   // не кэшируем сбой, попробуем при следующем событии
 
         lock (Cache)
         {
             if (Cache.Count > 60) Cache.Clear();
             if (Neg.Count > 60) Neg.Clear();
-            // «browser» запоминаем только на пару секунд: Chrome отдаёт список вкладок не сразу,
-            // а позже (иначе один неудачный просмотр навсегда оставлял «Слушает Nowring»)
-            if (site == "browser") Neg[key] = DateTime.UtcNow; else Cache[key] = site;
+            // «browser» и непроверенный YouTube запоминаем только на пару секунд: Chrome отдаёт список
+            // вкладок не сразу, а название вкладки у видео может обновиться позже
+            if (r.Site == "browser" || (r.Site == "youtube" && !r.Matched)) Neg[key] = (DateTime.UtcNow, r.Site, r.Matched);
+            else Cache[key] = r;
         }
-        return site;
+        return r;
     }
 
-    static string Scan(string aumid, string title)
+    static (string, bool) Scan(string aumid, string title)
+    {
+        var names = Names(aumid);
+
+        var t = title.ToLowerInvariant();
+        string? only = null;
+        int kinds = 0;
+        var seen = new HashSet<string>();
+        foreach (var n in names)
+        {
+            var l = n.ToLowerInvariant();
+            string? site =
+                l.Contains("яндекс музык") || l.Contains("yandex music") || l.Contains("music.yandex") ? "yandex" :
+                l.Contains("soundcloud") ? "soundcloud" :
+                l.Contains("youtube") ? "youtube" :
+                l.Contains("telegram") ? "telegram" : null;
+            if (site == null) continue;
+            // вкладка с названием играющего трека и признаком сайта: однозначно
+            if (t.Length > 2 && l.Contains(t)) return (site, true);
+            if (seen.Add(site)) { kinds++; only = site; }
+        }
+        if (kinds == 1) return (only!, only != "youtube");
+        // рядом открыты и другие сайты, а название не совпало ни с одной вкладкой: это превью YouTube
+        if (seen.Contains("youtube")) return ("youtube", false);
+        Log.Write("Сайт в браузере не определён (найдено названий вкладок и окон: " + names.Count + ")");
+        return ("browser", false);
+    }
+
+    static List<string> Names(string aumid)
     {
         var names = new List<string>();
         foreach (var h in FindWindows(ProcNames(aumid)))
@@ -60,27 +93,31 @@ static class BrowserSites
             }
             catch { }
         }
+        return names;
+    }
 
-        var t = title.ToLowerInvariant();
-        bool yandex = false, soundcloud = false;
-        foreach (var n in names)
+    static string? _tabKey;
+    static DateTime _tabAt;
+    static bool _tabRes;
+
+    /// <summary>Есть ли ещё вкладка с таким названием (результат на 3 секунды в кэше).</summary>
+    public static bool HasTab(string aumid, string title)
+    {
+        var key = aumid + "|" + title;
+        lock (Cache)
         {
-            var l = n.ToLowerInvariant();
-            bool isY = l.Contains("яндекс музык") || l.Contains("yandex music") || l.Contains("music.yandex");
-            bool isS = l.Contains("soundcloud");
-            // вкладка с названием играющего трека и признаком сайта: однозначно
-            if (t.Length > 2 && l.Contains(t))
-            {
-                if (isY) return "yandex";
-                if (isS) return "soundcloud";
-            }
-            yandex |= isY;
-            soundcloud |= isS;
+            if (_tabKey == key && (DateTime.UtcNow - _tabAt).TotalSeconds < 3) return _tabRes;
         }
-        if (yandex && !soundcloud) return "yandex";
-        if (soundcloud && !yandex) return "soundcloud";
-        Log.Write("Сайт в браузере не определён (найдено названий вкладок и окон: " + names.Count + ")");
-        return "browser";
+        bool res = false;
+        try
+        {
+            var t = title.ToLowerInvariant();
+            foreach (var n in Names(aumid))
+                if (n.ToLowerInvariant().Contains(t)) { res = true; break; }
+        }
+        catch { res = true; }   // сбой UIA: не рвём статус
+        lock (Cache) { _tabKey = key; _tabAt = DateTime.UtcNow; _tabRes = res; }
+        return res;
     }
 
     static string[] ProcNames(string aumid)

@@ -11,16 +11,41 @@ sealed class Settings
 {
     public bool Spotify { get; set; } = true;
     public bool Yandex { get; set; } = true;
+    public bool SoundCloud { get; set; } = true;
+    public bool YouTube { get; set; } = true;
+    public bool Telegram { get; set; } = true;
+    /// <summary>Прочие сайты в браузере.</summary>
     public bool Browser { get; set; } = true;
     public bool Covers { get; set; } = true;
     public bool Autostart { get; set; }
     public bool Dark { get; set; } = true;
 
+    /// <summary>Проверять обновления на GitHub и скачивать их в фоне.</summary>
+    public bool AutoUpdate { get; set; } = true;
+
+    /// <summary>Акцентный цвет приложения (#RRGGBB).</summary>
+    public string Accent { get; set; } = "#14C9A3";
+
     /// <summary>Показывать статус в Discord (выключатель без выхода из программы).</summary>
     public bool Enabled { get; set; } = true;
 
     /// <summary>Кнопка «Открыть в …» в карточке активности.</summary>
-    public bool ShowButton { get; set; } = true;
+    public bool ShowButton { get; set; }
+
+    /// <summary>YouTube в Discord как музыка («Слушает», с полосой прогресса), а не «Смотрит».</summary>
+    public bool VideoAsMusic { get; set; } = true;
+
+    /// <summary>Версия настроек (для одноразовых миграций).</summary>
+    public int Ver { get; set; }
+
+    // ---- свой статус
+    public bool CustomOn { get; set; }
+    public bool CustomOver { get; set; } = true;     // показывать вместо музыки
+    public bool CustomTimer { get; set; } = true;    // таймер «прошло времени»
+    public string CustomTitle { get; set; } = "";
+    public string CustomText { get; set; } = "";
+    public string CustomImage { get; set; } = "";    // "tpl:код" или "file:путь"
+    public long CustomStart { get; set; }
 
     /// <summary>Необязательно: свой Application ID (только через settings.json). Обычно пусто.</summary>
     public string ClientId { get; set; } = "";
@@ -50,7 +75,9 @@ sealed class Settings
         "spotify" => Spotify,
         "yandex" => Yandex,
         "browser" => Browser,
-        "soundcloud" => Browser,
+        "soundcloud" => SoundCloud,
+        "youtube" => YouTube,
+        "telegram" => Telegram,
         _ => false
     };
 
@@ -60,8 +87,13 @@ sealed class Settings
 
     public static Settings Load()
     {
-        try { return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new Settings(); }
-        catch { return new Settings(); }
+        try
+        {
+            var s = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new Settings();
+            if (s.Ver < 2) { s.ShowButton = false; s.Ver = 2; s.Save(); }   // кнопка «Открыть» теперь выключена по умолчанию
+            return s;
+        }
+        catch { return new Settings { Ver = 2 }; }
     }
 
     public void Save()
@@ -129,6 +161,9 @@ static class Fmt
         "spotify" => "Spotify",
         "yandex" => "Яндекс Музыка",
         "soundcloud" => "SoundCloud",
+        "youtube" => "YouTube",
+        "telegram" => "Telegram",
+        "custom" => "Свой статус",
         _ => "Браузер"
     };
 
@@ -137,6 +172,8 @@ static class Fmt
         "spotify" => "Открыть в Spotify",
         "yandex" => "Открыть в Яндекс Музыке",
         "soundcloud" => "Открыть в SoundCloud",
+        "youtube" => "Найти на YouTube",
+        "telegram" => "Открыть в Telegram",
         _ => "Открыть трек"
     };
 }

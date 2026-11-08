@@ -27,6 +27,8 @@ sealed class MediaWatcher
     GlobalSystemMediaTransportControlsSessionManager? _mgr;
     readonly List<Action> _unhooks = new();
     readonly object _lock = new();
+    TrackInfo? _lastYt;
+    string _lastYtApp = "";   // последнее «настоящее» видео YouTube (не превью при наведении мыши)
 
     public event Action? Changed;
 
@@ -70,10 +72,19 @@ sealed class MediaWatcher
         var a = id.ToLowerInvariant();
         if (a.Contains("spotify")) return "spotify";
         if (a.Contains("yandex") && a.Contains("music")) return "yandex";
+        if (a.Contains("telegram")) return "telegram";
         if (a.Contains("chrome") || a.Contains("msedge") || a.Contains("firefox") || a.Contains("308046b0af4a39cb") || a.Contains("opera") ||
             a.Contains("brave") || a.Contains("vivaldi") || a.Contains("yandex") || a.Contains("browser"))
             return "browser";
         return null;
+    }
+
+    bool YtAlive()
+    {
+        var y = _lastYt!;
+        if (y.Playing && y.Duration > TimeSpan.Zero
+            && y.Position + (DateTimeOffset.Now - y.At) > y.Duration + TimeSpan.FromSeconds(3)) return false;
+        return BrowserSites.HasTab(_lastYtApp, y.Title);
     }
 
     public async Task<TrackInfo?> SnapshotAsync(Settings st)
@@ -81,37 +92,64 @@ sealed class MediaWatcher
         var mgr = _mgr;
         if (mgr == null) return null;
 
-        Session? best = null;
-        string bestSrc = "";
-        int bestScore = 0;
         var cur = mgr.GetCurrentSession()?.SourceAppUserModelId;
-
+        var cands = new List<(Session S, string Src, int Score)>();
         foreach (var s in mgr.GetSessions())
         {
             var src = Classify(s.SourceAppUserModelId);
             if (src == null) continue;
-            // браузерная сессия может оказаться Яндекс Музыкой или SoundCloud: окончательно решаем ниже
-            if (src == "browser" ? !(st.Browser || st.Yandex) : !st.IsEnabled(src)) continue;
+            // браузерная сессия может оказаться любым сайтом: окончательно решаем ниже
+            if (src == "browser" ? !(st.Browser || st.Yandex || st.SoundCloud || st.YouTube || st.Telegram)
+                                  : !st.IsEnabled(src)) continue;
             var status = s.GetPlaybackInfo().PlaybackStatus;
             int score = status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing ? 3
                       : status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused ? 1 : 0;
             if (score == 0) continue;
             if (s.SourceAppUserModelId == cur) score++;
-            if (score > bestScore) { best = s; bestSrc = src; bestScore = score; }
+            cands.Add((s, src, score));
         }
-        if (best == null) return null;
+        cands.Sort((x, y) => y.Score.CompareTo(x.Score));
 
-        var props = await best.TryGetMediaPropertiesAsync();
-        var title = props.Title?.Trim() ?? "";
-        var artist = (props.Artist ?? "").Replace(" - Topic", "").Trim();
-        var album = props.AlbumTitle?.Trim() ?? "";
-        if (title.Length == 0) return null;
-        if (bestSrc == "spotify" && (title == "Advertisement" || title == "Spotify")) return null;
-
-        if (bestSrc == "browser")
+        Session? best = null;
+        string bestSrc = "", title = "", artist = "", album = "";
+        foreach (var (s, src0, _) in cands)
         {
-            bestSrc = BrowserSites.Detect(best.SourceAppUserModelId, title, artist);
-            if (bestSrc == "yandex" ? !st.Yandex : !st.Browser) return null;
+            var props = await s.TryGetMediaPropertiesAsync();
+            var ti = props.Title?.Trim() ?? "";
+            var ar = (props.Artist ?? "").Replace(" - Topic", "").Trim();
+            if (ti.Length == 0) continue;
+            var src = src0;
+            if (src == "spotify" && (ti == "Advertisement" || ti == "Spotify")) continue;
+
+            if (src == "browser")
+            {
+                var (site, matched) = BrowserSites.Detect(s.SourceAppUserModelId, ti, ar);
+                src = site;
+                // YouTube: превью, на которое случайно навели мышь, не открыто во вкладке — его пропускаем,
+                // приоритет у большого видео
+                if (src == "youtube" && !matched) continue;
+            }
+            if (!st.IsEnabled(src)) continue;
+            // Telegram: только музыка (у голосовых и кружков нет исполнителя)
+            if (src == "telegram" && ar.Length == 0) continue;
+
+            best = s; bestSrc = src; title = ti; artist = ar; album = props.AlbumTitle?.Trim() ?? "";
+            break;
+        }
+
+        // Chrome при наведении мыши на превью подменяет сессию видео и потом может убрать её совсем.
+        // Тогда остаётся либо ничего, либо чужая сессия на паузе (например, последний трек Spotify).
+        // Пока вкладка с видео открыта и оно не закончилось, держим настоящее видео YouTube.
+        // Играющий сейчас другой источник (не на паузе) имеет приоритет.
+        bool otherPlaying = best != null && bestSrc != "youtube"
+            && best.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+        if (_lastYt != null && st.YouTube && (best == null || (bestSrc != "youtube" && !otherPlaying)) && YtAlive())
+            return _lastYt;
+
+        if (best == null)
+        {
+            _lastYt = null;
+            return null;
         }
 
         var info = best.GetPlaybackInfo();
@@ -155,7 +193,10 @@ sealed class MediaWatcher
             return null;
         };
 
-        return new TrackInfo(CoverCache.Key(artist, title, album), title, artist, album,
+        var result = new TrackInfo(CoverCache.Key(artist, title, album), title, artist, album,
             bestSrc, playing, pos, dur, now, load);
+        if (bestSrc == "youtube") { _lastYt = result; _lastYtApp = best.SourceAppUserModelId; }
+        else _lastYt = null;
+        return result;
     }
 }
