@@ -1,0 +1,626 @@
+<Window x:Class="Nowring.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Nowring" Height="600" Width="880"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="CanMinimize" ShowInTaskbar="True"
+        WindowStartupLocation="Manual"
+        FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True"
+        Foreground="{DynamicResource Text}">
+    <Window.Resources>
+        <CubicEase x:Key="AuroraEase" EasingMode="EaseInOut"/>
+        <!-- Переключатель ToggleSwitch -->
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="Margin" Value="0,7"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <DockPanel Background="Transparent" LastChildFill="True">
+                            <Grid DockPanel.Dock="Right" Width="42" Height="24" VerticalAlignment="Center">
+                                <Border x:Name="Off" CornerRadius="12" Background="{DynamicResource Off}"/>
+                                <Border x:Name="On" CornerRadius="12" Opacity="0" Background="{DynamicResource AccentGrad}"/>
+                                <Ellipse x:Name="Knob" Width="18" Height="18" Fill="White" HorizontalAlignment="Left" Margin="3,0,0,0">
+                                    <Ellipse.RenderTransform>
+                                        <TranslateTransform x:Name="KnobT"/>
+                                    </Ellipse.RenderTransform>
+                                    <Ellipse.Effect>
+                                        <DropShadowEffect BlurRadius="4" ShadowDepth="1" Opacity="0.35" Color="Black"/>
+                                    </Ellipse.Effect>
+                                </Ellipse>
+                            </Grid>
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="KnobT" Storyboard.TargetProperty="X" To="18" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="On" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="KnobT" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="On" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Off" Property="Background" Value="{DynamicResource Track}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="InputMethod.IsInputMethodEnabled" Value="False"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource Text}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Bd" Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Edge}" BorderThickness="1" CornerRadius="8" Padding="10,7">
+                            <ScrollViewer x:Name="PART_ContentHost" VerticalScrollBarVisibility="Disabled"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{DynamicResource Card}" CornerRadius="10" Padding="12,8">
+                            <ContentPresenter HorizontalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource CardHover}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Кнопки управления окном -->
+        <Style x:Key="TitleBtn" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource Sub}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource CardHover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Title}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CloseBtn" TargetType="Button" BasedOn="{StaticResource TitleBtn}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#ED4245"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ProgressBar">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}" CornerRadius="2"/>
+                            <Border x:Name="PART_Track">
+                                <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="2" Background="{TemplateBinding Foreground}"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Навигационные табы боковой панели -->
+        <Style x:Key="WarpTabStyle" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource Sub}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="10" Padding="14,0" Height="40" Margin="0,3" SnapsToDevicePixels="False">
+                            <ContentPresenter x:Name="ContentSite" VerticalAlignment="Center" ContentSource="Header"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource CardHover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Title}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TabSel}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TabSelText}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Тонкий скроллбар в цвет темы -->
+        <Style x:Key="ScrollPage" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ScrollThumb" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="Th" Margin="2,0" CornerRadius="4" Background="{DynamicResource Off}"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Th" Property="Background" Value="{DynamicResource Muted}"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="Th" Property="Background" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand" Style="{StaticResource ScrollPage}"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand" Style="{StaticResource ScrollPage}"/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource ScrollThumb}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="Root" Margin="10" CornerRadius="14" Opacity="0" Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.5" Color="Black"/>
+        </Border.Effect>
+        <Border.RenderTransform>
+            <TranslateTransform x:Name="SlideT"/>
+        </Border.RenderTransform>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Верхняя панель -->
+            <Grid x:Name="TitleBar" Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnDrag">
+                <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                    <Image Source="assets/logo.png" Width="20" Height="20" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <TextBlock Text="Nowring 2.0.1" Foreground="{DynamicResource Title}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+                
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <Button Style="{StaticResource TitleBtn}" Click="OnMin" ToolTip="Свернуть">
+                        <Path Data="M0,0.5 L10,0.5" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.4" Width="10" Height="1" Stretch="None"/>
+                    </Button>
+                    <Button Style="{StaticResource CloseBtn}" Click="OnClose" ToolTip="Закрыть" Margin="2,0,0,0">
+                        <Path Data="M0,0 L10,10 M10,0 L0,10" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="10" Height="10" Stretch="None"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- Главный контент с сайдбаром -->
+            <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0" TabStripPlacement="Left" SelectionChanged="OnTabSelectionChanged">
+                <TabControl.Template>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition x:Name="SidebarColumn" Width="210"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <!-- Боковая панель (Sidebar) -->
+                            <Border Grid.Column="0" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Edge}" BorderThickness="0,0,1,0" CornerRadius="0,0,0,14">
+                                <Grid Margin="10,10,10,14">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <StackPanel Grid.Row="0" IsItemsHost="True"/>
+
+                                    <Button Grid.Row="1" Style="{StaticResource TitleBtn}" Width="34" Height="34" HorizontalAlignment="Left" ToolTip="Справка / Отзыв" Click="OnHelp">
+                                        <TextBlock Text="💬" Foreground="{DynamicResource Sub}" FontSize="14"/>
+                                    </Button>
+                                </Grid>
+                            </Border>
+
+                            <!-- Правая сторона -->
+                            <Grid Grid.Column="1" Margin="14">
+                                <Border Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Edge}" BorderThickness="1" CornerRadius="12">
+                                    <ContentPresenter x:Name="TabContentPresenter" ContentSource="SelectedContent" Margin="16"/>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </ControlTemplate>
+                </TabControl.Template>
+
+                <!-- Вкладка 1: Главная -->
+                <TabItem Style="{StaticResource WarpTabStyle}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🌐 " FontSize="12"/>
+                            <TextBlock Text="Главная"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    
+                    <Grid>
+                    <Grid x:Name="HomeBg" Margin="-16" IsHitTestVisible="False" Background="{DynamicResource HomeBase}">
+                        <Ellipse Width="440" Height="360" Fill="{DynamicResource GlowD}" RenderTransformOrigin="0.5,0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><ScaleTransform x:Name="AS1"/><TranslateTransform x:Name="AT1" X="-220" Y="-180"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse Width="420" Height="340" Fill="{DynamicResource GlowB}" RenderTransformOrigin="0.5,0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><ScaleTransform x:Name="AS2"/><TranslateTransform x:Name="AT2" X="200" Y="-170"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse Width="320" Height="280" Fill="{DynamicResource GlowB}" RenderTransformOrigin="0.5,0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><ScaleTransform x:Name="AS3"/><TranslateTransform x:Name="AT3" X="250" Y="60"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse Width="600" Height="320" Fill="{DynamicResource GlowC}" RenderTransformOrigin="0.5,0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><ScaleTransform x:Name="AS4"/><TranslateTransform x:Name="AT4" X="60" Y="235"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse Width="500" Height="420" Fill="{DynamicResource GlowMain}" RenderTransformOrigin="0.5,0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><ScaleTransform x:Name="AS5"/><TranslateTransform x:Name="AT5" X="0" Y="-10"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse Width="260" Height="210" Fill="{DynamicResource GlowHi}" RenderTransformOrigin="0.5,0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><ScaleTransform x:Name="AS6"/><TranslateTransform x:Name="AT6" X="-60" Y="-20"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse Width="300" Height="260" Fill="{DynamicResource GlowC}" RenderTransformOrigin="0.5,0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><ScaleTransform x:Name="AS7"/><TranslateTransform x:Name="AT7" X="-250" Y="120"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse Width="200" Height="170" Fill="{DynamicResource GlowHi}" RenderTransformOrigin="0.5,0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><ScaleTransform x:Name="AS8"/><TranslateTransform x:Name="AT8" X="120" Y="90"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse Width="260" Height="220" Fill="{DynamicResource GlowMain}" RenderTransformOrigin="0.5,0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><ScaleTransform x:Name="AS9"/><TranslateTransform x:Name="AT9" X="-120" Y="170"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <!-- световые лучи -->
+                        <Ellipse x:Name="Sk1" Width="460" Height="5" Fill="{DynamicResource Streak}" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0.7"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><RotateTransform x:Name="SR1" Angle="-5"/><TranslateTransform x:Name="SX1" X="-170" Y="10"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse x:Name="Sk2" Width="400" Height="4" Fill="{DynamicResource Streak}" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><RotateTransform x:Name="SR2" Angle="4"/><TranslateTransform x:Name="SX2" X="-190" Y="45"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse x:Name="Sk3" Width="420" Height="5" Fill="{DynamicResource Streak}" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0.6"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><RotateTransform x:Name="SR3" Angle="-3"/><TranslateTransform x:Name="SX3" X="200" Y="-20"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse x:Name="Sk4" Width="300" Height="3" Fill="{DynamicResource Streak}" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><RotateTransform x:Name="SR4" Angle="8"/><TranslateTransform x:Name="SX4" X="170" Y="60"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Ellipse x:Name="Sk5" Width="340" Height="4" Fill="{DynamicResource Streak}" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0.5"><Ellipse.CacheMode><BitmapCache/></Ellipse.CacheMode><Ellipse.RenderTransform><TransformGroup><RotateTransform x:Name="SR5" Angle="-9"/><TranslateTransform x:Name="SX5" X="-150" Y="-45"/></TransformGroup></Ellipse.RenderTransform></Ellipse>
+                        <Rectangle Fill="{DynamicResource Vignette}"/>
+                        <Grid.Triggers>
+                            <EventTrigger RoutedEvent="Loaded">
+                                <BeginStoryboard><Storyboard Timeline.DesiredFrameRate="30">
+                                    <DoubleAnimation Storyboard.TargetName="AT1" Storyboard.TargetProperty="X" From="-290" To="-150" Duration="0:0:7.0" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT1" Storyboard.TargetProperty="Y" From="-240" To="-120" Duration="0:0:8.3" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS1" Storyboard.TargetProperty="ScaleX" From="0.8" To="1.3" Duration="0:0:6.3" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS1" Storyboard.TargetProperty="ScaleY" From="1.3" To="0.8" Duration="0:0:7.1" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT2" Storyboard.TargetProperty="X" From="120" To="280" Duration="0:0:6.4" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT2" Storyboard.TargetProperty="Y" From="-110" To="-230" Duration="0:0:7.6" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS2" Storyboard.TargetProperty="ScaleX" From="1.3" To="0.8" Duration="0:0:5.8" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS2" Storyboard.TargetProperty="ScaleY" From="0.8" To="1.3" Duration="0:0:6.5" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT3" Storyboard.TargetProperty="X" From="190" To="310" Duration="0:0:5.2" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT3" Storyboard.TargetProperty="Y" From="-40" To="160" Duration="0:0:6.6" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS3" Storyboard.TargetProperty="ScaleX" From="0.8" To="1.3" Duration="0:0:4.7" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS3" Storyboard.TargetProperty="ScaleY" From="1.3" To="0.8" Duration="0:0:5.6" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT4" Storyboard.TargetProperty="X" From="-70" To="190" Duration="0:0:6.2" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT4" Storyboard.TargetProperty="Y" From="285" To="185" Duration="0:0:4.8" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS4" Storyboard.TargetProperty="ScaleX" From="1.3" To="0.8" Duration="0:0:5.6" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS4" Storyboard.TargetProperty="ScaleY" From="0.8" To="1.3" Duration="0:0:4.1" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT5" Storyboard.TargetProperty="X" From="-70" To="70" Duration="0:0:5.5" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT5" Storyboard.TargetProperty="Y" From="-70" To="50" Duration="0:0:4.6" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS5" Storyboard.TargetProperty="ScaleX" From="0.8" To="1.3" Duration="0:0:5.0" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS5" Storyboard.TargetProperty="ScaleY" From="1.3" To="0.8" Duration="0:0:3.9" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT6" Storyboard.TargetProperty="X" From="-170" To="50" Duration="0:0:4.2" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT6" Storyboard.TargetProperty="Y" From="60" To="-100" Duration="0:0:5.1" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS6" Storyboard.TargetProperty="ScaleX" From="1.3" To="0.8" Duration="0:0:3.8" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS6" Storyboard.TargetProperty="ScaleY" From="0.8" To="1.3" Duration="0:0:4.3" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT7" Storyboard.TargetProperty="X" From="-320" To="-180" Duration="0:0:5.8" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT7" Storyboard.TargetProperty="Y" From="30" To="210" Duration="0:0:6.9" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS7" Storyboard.TargetProperty="ScaleX" From="0.8" To="1.3" Duration="0:0:5.2" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS7" Storyboard.TargetProperty="ScaleY" From="1.3" To="0.8" Duration="0:0:5.9" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT8" Storyboard.TargetProperty="X" From="20" To="220" Duration="0:0:3.8" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT8" Storyboard.TargetProperty="Y" From="170" To="10" Duration="0:0:4.4" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS8" Storyboard.TargetProperty="ScaleX" From="1.3" To="0.8" Duration="0:0:3.4" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS8" Storyboard.TargetProperty="ScaleY" From="0.8" To="1.3" Duration="0:0:3.7" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT9" Storyboard.TargetProperty="X" From="-210" To="-30" Duration="0:0:4.9" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AT9" Storyboard.TargetProperty="Y" From="100" To="240" Duration="0:0:5.7" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS9" Storyboard.TargetProperty="ScaleX" From="0.8" To="1.3" Duration="0:0:4.4" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="AS9" Storyboard.TargetProperty="ScaleY" From="1.3" To="0.8" Duration="0:0:4.8" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SR1" Storyboard.TargetProperty="Angle" From="-12" To="2" Duration="0:0:4.4" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX1" Storyboard.TargetProperty="X" From="-240" To="-100" Duration="0:0:5.2" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX1" Storyboard.TargetProperty="Y" From="-15" To="35" Duration="0:0:5.6" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="Sk1" Storyboard.TargetProperty="Opacity" From="0.15" To="0.95" Duration="0:0:3.4" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SR2" Storyboard.TargetProperty="Angle" From="-3" To="11" Duration="0:0:5.3" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX2" Storyboard.TargetProperty="X" From="-260" To="-120" Duration="0:0:5.9" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX2" Storyboard.TargetProperty="Y" From="20" To="70" Duration="0:0:6.2" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="Sk2" Storyboard.TargetProperty="Opacity" From="0.15" To="0.95" Duration="0:0:4.2" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SR3" Storyboard.TargetProperty="Angle" From="-10" To="4" Duration="0:0:6.2" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX3" Storyboard.TargetProperty="X" From="130" To="270" Duration="0:0:6.6" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX3" Storyboard.TargetProperty="Y" From="-45" To="5" Duration="0:0:6.8" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="Sk3" Storyboard.TargetProperty="Opacity" From="0.15" To="0.95" Duration="0:0:5.0" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SR4" Storyboard.TargetProperty="Angle" From="1" To="15" Duration="0:0:7.1" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX4" Storyboard.TargetProperty="X" From="100" To="240" Duration="0:0:7.3" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX4" Storyboard.TargetProperty="Y" From="35" To="85" Duration="0:0:7.4" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="Sk4" Storyboard.TargetProperty="Opacity" From="0.15" To="0.95" Duration="0:0:5.8" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SR5" Storyboard.TargetProperty="Angle" From="-16" To="-2" Duration="0:0:8.0" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX5" Storyboard.TargetProperty="X" From="-220" To="-80" Duration="0:0:8.0" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="SX5" Storyboard.TargetProperty="Y" From="-70" To="-20" Duration="0:0:8.0" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                    <DoubleAnimation Storyboard.TargetName="Sk5" Storyboard.TargetProperty="Opacity" From="0.15" To="0.95" Duration="0:0:6.6" EasingFunction="{StaticResource AuroraEase}" AutoReverse="True" RepeatBehavior="Forever"/>
+                                </Storyboard></BeginStoryboard>
+                            </EventTrigger>
+                        </Grid.Triggers>
+                    </Grid>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="400" Margin="0,10">
+                            <!-- Блок обложки / статуса -->
+                            <Grid Width="130" Height="130" HorizontalAlignment="Center" Margin="0,0,0,16">
+                            <Border Width="130" Height="130" CornerRadius="16" Background="{DynamicResource CoverBg}" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <Border.Effect><DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.5" Color="Black"/></Border.Effect>
+                                <Border CornerRadius="16">
+                                    <Border.Background>
+                                        <ImageBrush x:Name="CoverBrush" Stretch="UniformToFill"/>
+                                    </Border.Background>
+                                </Border>
+                            </Border>
+                            </Grid>
+
+                            <StackPanel x:Name="InfoPanel" HorizontalAlignment="Center">
+                                <TextBlock x:Name="TitleText" Text="Ничего не играет" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource Title}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="ArtistText" Margin="0,4,0,0" FontSize="14" Foreground="{DynamicResource HomeSub}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+                                <Border x:Name="SourceChip" Margin="0,8,0,0" HorizontalAlignment="Center" CornerRadius="14" Background="{DynamicResource Chip}" Padding="14,5" Visibility="Collapsed">
+                                    <TextBlock x:Name="SourceText" FontSize="11" Foreground="{DynamicResource ChipText}"/>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Прогресс -->
+                            <ProgressBar x:Name="Progress" Margin="0,20,0,0" Height="4" Minimum="0" Maximum="1" Background="{DynamicResource HomeTrack}" Foreground="{DynamicResource HomeFill}"/>
+                            <Grid Margin="0,6,0,0">
+                                <TextBlock x:Name="PosText" FontSize="11" Foreground="{DynamicResource HomeMuted}"/>
+                                <TextBlock x:Name="DurText" FontSize="11" Foreground="{DynamicResource HomeMuted}" HorizontalAlignment="Right"/>
+                            </Grid>
+
+                            <!-- Подсказка Spotify -->
+                            <TextBlock x:Name="Hint" Visibility="Collapsed" Margin="0,14,0,0" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource HomeMuted}" Cursor="Hand" MouseLeftButtonUp="OnHint" TextAlignment="Center" Text="Если в Discord видны две активности: Настройки → Подключения → Spotify → выключите «Показывать Spotify как статус». (Нажмите, чтобы скрыть.)"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,-6,0">
+                        <Border x:Name="StatusWrap" Padding="0,0,8,0" Opacity="0" VerticalAlignment="Center">
+                            <Border.LayoutTransform><ScaleTransform x:Name="StatusScale" ScaleX="0"/></Border.LayoutTransform>
+                            <TextBlock x:Name="DiscordText" FontSize="12" Foreground="{DynamicResource HomeSub}" VerticalAlignment="Center"/>
+                        </Border>
+                        <Ellipse x:Name="DiscordDot" Width="10" Height="10" Fill="#6B6B76" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Border x:Name="UpdateBar" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,2"
+                            CornerRadius="16" Padding="16,5,5,5" Background="#B3000000">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="UpdText" Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Button x:Name="UpdNow" Click="OnUpdateNow" Content="Обновить" Foreground="White"/>
+                        </StackPanel>
+                    </Border>
+                    </Grid>
+                </TabItem>
+
+                <TabItem Style="{StaticResource WarpTabStyle}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎵 " FontSize="12"/>
+                            <TextBlock Text="Источники"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10">
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="МУЗЫКА" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <CheckBox x:Name="SpotifyCb" Content="Spotify" Click="OnToggle"/>
+                                    <CheckBox x:Name="YandexCb" Content="Яндекс Музыка" Click="OnToggle"/>
+                                    <CheckBox x:Name="SoundCloudCb" Content="SoundCloud" Click="OnToggle"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,0" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="ВИДЕО И МЕССЕНДЖЕРЫ" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <CheckBox x:Name="YouTubeCb" Content="YouTube" Click="OnToggle"/>
+                                    <CheckBox x:Name="TelegramCb" Content="Telegram (только музыка)" Click="OnToggle"/>
+                                    <CheckBox x:Name="BrowserCb" Content="Браузер (прочие сайты)" Click="OnToggle"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Style="{StaticResource WarpTabStyle}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎨 " FontSize="12"/>
+                            <TextBlock Text="Интерфейс"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10">
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="ВНЕШНИЙ ВИД" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <CheckBox x:Name="DarkCb" Content="Тёмная тема" Click="OnToggle"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="АКЦЕНТНЫЙ ЦВЕТ" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Переключатели, вкладки и фон на главной. «Авто»: цвет подстраивается под играющий трек" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,0,0,12"/>
+                                    <WrapPanel x:Name="AccentPanel"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="ЯЗЫК" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <StackPanel x:Name="LangPanel" Orientation="Horizontal"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,0" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="ПРИЛОЖЕНИЕ" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <CheckBox x:Name="AutostartCb" Content="Запускать вместе с Windows" Click="OnToggle"/>
+                                    <CheckBox x:Name="AutoUpdCb" Content="Автоматически искать обновления" Click="OnToggle"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <Button x:Name="UpdBtn" Content="Проверить обновления" Click="OnCheckUpdate"/>
+                                        <TextBlock x:Name="UpdStatus" VerticalAlignment="Center" Margin="12,0,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="240" Foreground="{DynamicResource Sub}"/>
+                                    </StackPanel>
+                                    <Button Content="Выйти из приложения" Margin="0,12,0,0" Click="OnQuit" HorizontalAlignment="Left" Width="180"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Style="{StaticResource WarpTabStyle}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚡ " FontSize="12"/>
+                            <TextBlock Text="Активность"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10">
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,0" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="DISCORD" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <CheckBox x:Name="EnabledCb" Content="Статус активности в Discord" Click="OnToggle"/>
+                                    <CheckBox x:Name="CoversCb" Content="Показывать обложки" Click="OnToggle"/>
+                                    <CheckBox x:Name="VideoMusicCb" Content="YouTube как музыка (с полосой прогресса)" Click="OnToggle"/>
+                                    <CheckBox x:Name="ButtonCb" Content="Кнопка «Открыть в…» в карточке" Click="OnToggle"/>
+                                    <CheckBox x:Name="WebCb" Content="Discord в браузере (нужен Vencord, см. README)" Click="OnToggle"/>
+                                    <CheckBox x:Name="ArtistCb" Content="Показывать исполнителя" Click="OnToggle"/>
+                                    <CheckBox x:Name="AlbumCb" Content="Показывать альбом / плейлист" Click="OnToggle"/>
+                                    <CheckBox x:Name="BadgeCb" Content="Значок приложения на обложке (Spotify, YouTube…)" Click="OnToggle"/>
+                                    <TextBlock Text="КАРТОЧКА" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,12,0,8"/>
+                                    <CheckBox x:Name="TaLineCb" Content="Название и исполнитель в одной строке" Click="OnToggle"/>
+                                    <CheckBox x:Name="AaLineCb" Content="Исполнитель и альбом в одной строке" Click="OnToggle"/>
+                                    <CheckBox x:Name="SwapCb" Content="Поменять местами название и исполнителя" Click="OnToggle"/>
+                                    <TextBlock Text="Приставка к исполнителю" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,10,0,6"/>
+                                    <StackPanel x:Name="ArtistPrefixPanel" Orientation="Horizontal"/>
+                                    <TextBlock Text="Приставка к альбому" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,10,0,6"/>
+                                    <StackPanel x:Name="AlbumPrefixPanel" Orientation="Horizontal" Margin="0,0,0,6"/>
+                                    <CheckBox x:Name="AlbumNoArtistCb" Content="Показывать альбом, когда исполнителя нет" Click="OnToggle"/>
+                                    <CheckBox x:Name="ProgressCb" Content="Показывать время воспроизведения" Click="OnToggle"/>
+                                    <CheckBox x:Name="HideInfoCb" Content="Не показывать никакой информации о песне" Click="OnToggle"/>
+                                    <TextBlock Text="Вебхук для обложек (необязательно, см. README)" FontSize="11" Foreground="{DynamicResource Muted}" Margin="0,10,0,4"/>
+                                    <TextBox x:Name="WebhookBox" MaxLength="200" TextChanged="OnWebhook"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Style="{StaticResource WarpTabStyle}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="✨ " FontSize="12"/>
+                            <TextBlock Text="Свой статус"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10">
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="ШАБЛОНЫ" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,10"/>
+                                    <WrapPanel x:Name="TplPanel"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="СВОЙ СТАТУС" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <CheckBox x:Name="CustomOnCb" Content="Включить свой статус" Click="OnToggle"/>
+                                    <CheckBox x:Name="CustomOverCb" Content="Показывать вместо музыки" Click="OnToggle"/>
+                                    <CheckBox x:Name="CustomTimerCb" Content="Показывать таймер" Click="OnToggle"/>
+                                    <TextBlock Text="Вид карточки в Discord" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,10,0,6"/>
+                                    <StackPanel x:Name="CustomTypePanel" Orientation="Horizontal"/>
+                                    <TextBlock Text="Что делаешь" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,12,0,5"/>
+                                    <TextBox x:Name="CustomTitleBox" MaxLength="64" TextChanged="OnCustomText"/>
+                                    <TextBlock Text="Описание" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,12,0,5"/>
+                                    <TextBox x:Name="CustomTextBox" MaxLength="100" TextChanged="OnCustomText"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="ОБЛОЖКА" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,10"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="72" Height="72" CornerRadius="12" Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                            <Border CornerRadius="12">
+                                                <Border.Background><ImageBrush x:Name="CustomBrush" Stretch="UniformToFill"/></Border.Background>
+                                            </Border>
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <Button Content="Выбрать картинку…" Click="OnPickImage" HorizontalAlignment="Left"/>
+                                            <Button Content="Убрать" Click="OnClearImage" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- Вкладка 5: О программе -->
+                <TabItem Style="{StaticResource WarpTabStyle}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="💬 " FontSize="12"/>
+                            <TextBlock Text="О программе"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <StackPanel Margin="10" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Image Source="assets/logo.png" Width="64" Height="64" Margin="0,0,0,16"/>
+                        <TextBlock Text="Nowring 2.0.1" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource Title}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Версия 2.0.1 · 2026" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" HorizontalAlignment="Center"/>
+                        <Button Content="GitHub  ·  zxce1zy/Nowring" Click="OnGitHub" Margin="0,18,0,0" HorizontalAlignment="Center" ToolTip="https://github.com/zxce1zy/Nowring"/>
+                        <TextBlock Text="© 2026 Nowring" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,16,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </TabItem>
+
+            </TabControl>
+        </Grid>
+    </Border>
+</Window>
