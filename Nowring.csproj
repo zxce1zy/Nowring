@@ -12,7 +12,7 @@
     <RootNamespace>Nowring</RootNamespace>
 
     <!-- сведения о программе (версию в CI подставляет тег релиза: -p:Version=...) -->
-    <Version>2.0.0</Version>
+    <Version>3.0.0</Version>
     <Product>Nowring</Product>
     <Authors>zxce1zy</Authors>
     <Description>Music in Discord: Rich Presence for Spotify, Yandex Music and SoundCloud</Description>
@@ -44,6 +44,20 @@
 
   <ItemGroup>
     <Resource Include="assets\logo.png" />
+    <!-- Lyrics Overlay (тексты песен на экране): лежит внутри Nowring.exe и распаковывается при первом запуске -->
+    <EmbeddedResource Include="lyrics\LyricsOverlay.exe" LogicalName="LyricsOverlay.exe" />
   </ItemGroup>
+
+  <!-- Lyrics Overlay пересобирается сам, когда изменился lyrics\source\lyrics_overlay_v3.py (нужен Python 3.12).
+       Нет Python или сборка не удалась: берётся готовый lyrics\LyricsOverlay.exe. Отключить: -p:SkipLyricsBuild=true -->
+  <Target Name="BuildLyrics" BeforeTargets="BeforeBuild"
+          Inputs="lyrics\source\lyrics_overlay_v3.py;lyrics\source\build_exe.py" Outputs="lyrics\LyricsOverlay.exe"
+          Condition="'$(OS)' == 'Windows_NT' And '$(SkipLyricsBuild)' != 'true'">
+    <Exec Command="py -3.12 &quot;lyrics\source\build_exe.py&quot; --auto || python &quot;lyrics\source\build_exe.py&quot; --auto"
+          WorkingDirectory="$(MSBuildProjectDirectory)" ContinueOnError="true" IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="LyricsExit" />
+    </Exec>
+    <Warning Condition="'$(LyricsExit)' != '0'" Text="Lyrics Overlay не пересобран (нужен Python 3.12), используется готовый lyrics\LyricsOverlay.exe" />
+  </Target>
 
 </Project>

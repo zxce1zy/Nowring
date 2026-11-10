@@ -33,7 +33,7 @@ static class Lookup
 
     static HttpClient Create()
     {
-        var h = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
+        var h = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
         h.DefaultRequestHeaders.UserAgent.ParseAdd("Nowring/1.0");
         return h;
     }
@@ -81,15 +81,29 @@ static class Lookup
 
             var yaTask = YandexAsync(first, title);
             var dzTask = DeezerAsync(first, title);
-            await Task.WhenAll(yaTask, dzTask);
-            var ya = yaTask.Result;
-            var dz = dzTask.Result;
+            await Task.WhenAny(Task.WhenAll(yaTask, dzTask), Task.Delay(5000));
+            var ya = yaTask.IsCompletedSuccessfully ? yaTask.Result : null;
+            var dz = dzTask.IsCompletedSuccessfully ? dzTask.Result : null;
 
-            string? cover = ya?.CoverUrl ?? dz?.CoverUrl ?? await ITunesCoverAsync(first, title);
+            string? cover = ya?.CoverUrl ?? dz?.CoverUrl;
+            string? itArtist = null;
+            if (cover == null || ya?.Artists == null && dz?.Artists == null)
+            {
+                var it = await ITunesAsync(first, title);
+                cover ??= it.Cover;
+                itArtist = it.Artist;
+            }
 
             // исполнителей берём из того источника, где их больше (фиты)
             string[]? artists = ya?.Artists;
             if (dz?.Artists != null && (artists == null || dz.Artists.Length > artists.Length)) artists = dz.Artists;
+
+            if (artists == null && !string.IsNullOrEmpty(itArtist))
+            {
+                var parts = Regex.Split(itArtist, @"\s*(?:,|;|&|\sfeat\.?\s|\sft\.?\s)\s*", RegexOptions.IgnoreCase)
+                    .Select(x => x.Trim()).Where(x => x.Length > 0).ToArray();
+                if (parts.Length > 0) artists = parts;
+            }
 
             Dictionary<string, string>? links = null;
             if (dz?.Links != null) links = new Dictionary<string, string>(dz.Links);
@@ -258,7 +272,7 @@ static class Lookup
             if (artists == null || artists.Length == 0)
                 artists = hit.Value.Artist.Length > 0 ? new[] { hit.Value.Artist } : null;
 
-            var links = await SongLink(hit.Value.Link) ?? new Dictionary<string, string>();
+            var links = new Dictionary<string, string>();
             if (hit.Value.Link.StartsWith("https://")) links["deezer"] = hit.Value.Link;
 
             return new TrackMeta(hit.Value.Cover, artists, links);
@@ -334,19 +348,19 @@ static class Lookup
 
     // ---------- iTunes (только обложка) ----------
 
-    static async Task<string?> ITunesCoverAsync(string first, string title)
+    static async Task<(string? Cover, string? Artist)> ITunesAsync(string first, string title)
     {
         const string host = "itunes.apple.com";
-        if (!Net.IsUp(host)) return null;
+        if (!Net.IsUp(host)) return (null, null);
         try
         {
             var json = await Http.GetStringAsync("https://itunes.apple.com/search?entity=song&limit=8&term=" +
                                                  Uri.EscapeDataString(first + " " + title));
             using var doc = JsonDocument.Parse(json);
-            if (!doc.RootElement.TryGetProperty("results", out var arr) || arr.ValueKind != JsonValueKind.Array) return null;
+            if (!doc.RootElement.TryGetProperty("results", out var arr) || arr.ValueKind != JsonValueKind.Array) return (null, null);
 
             string nt = Norm(title), na = Norm(first);
-            if (nt.Length == 0 || na.Length == 0) return null;
+            if (nt.Length == 0 || na.Length == 0) return (null, null);
 
             foreach (var it in arr.EnumerateArray())
             {
@@ -354,14 +368,14 @@ static class Lookup
                 var an = Norm(Str(it, "artistName"));
                 if (an.Length == 0 || !(an == na || an.Contains(na) || na.Contains(an))) continue;
                 var art = Str(it, "artworkUrl100");
-                if (art.StartsWith("https://")) return art.Replace("100x100bb", "600x600bb");
+                if (art.StartsWith("https://")) return (art.Replace("100x100bb", "600x600bb"), Str(it, "artistName"));
             }
-            return null;
+            return (null, null);
         }
         catch (Exception ex)
         {
             Net.Fail(host, ex);
-            return null;
+            return (null, null);
         }
     }
 

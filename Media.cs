@@ -120,6 +120,7 @@ sealed class MediaWatcher
             if (ti.Length == 0) continue;
             var src = src0;
             if (src == "spotify" && (ti == "Advertisement" || ti == "Spotify")) continue;
+            if (src == "spotify" && BrowserSites.SpotifyArtists(ti, ar) is { } full) ar = full;
 
             if (src == "browser")
             {

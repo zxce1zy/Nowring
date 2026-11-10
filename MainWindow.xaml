@@ -253,7 +253,7 @@
             <Grid x:Name="TitleBar" Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnDrag">
                 <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
                     <Image Source="assets/logo.png" Width="20" Height="20" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text="Nowring Client" Foreground="{DynamicResource Title}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Nowring 3.0.0" Foreground="{DynamicResource Title}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                 </StackPanel>
                 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
@@ -442,6 +442,43 @@
                     </Grid>
                 </TabItem>
 
+                <!-- Вкладка: Тексты песен (Lyrics Overlay) -->
+                <TabItem Style="{StaticResource WarpTabStyle}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎤 " FontSize="12"/>
+                            <TextBlock Text="Тексты"/>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10">
+                            <!-- у Lyrics свой фиолетовый цвет (как у его значка), независимо от акцентного цвета Nowring -->
+                            <StackPanel.Resources>
+                                <SolidColorBrush x:Key="Accent" Color="#926CF8"/>
+                                <LinearGradientBrush x:Key="AccentGrad" StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#A582FA" Offset="0"/>
+                                    <GradientStop Color="#7C54EE" Offset="1"/>
+                                </LinearGradientBrush>
+                            </StackPanel.Resources>
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="ТЕКСТЫ ПЕСЕН НА ЭКРАНЕ" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <CheckBox x:Name="LyricsOnCb" Content="Показывать текст песни поверх экрана" Click="OnLyricsToggle"/>
+                                    <CheckBox x:Name="LyricsAutoCb" Content="Запускать вместе с Nowring" Click="OnLyricsToggle"/>
+                                    <TextBlock x:Name="LyricsStatus" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="УПРАВЛЕНИЕ" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <TextBlock TextWrapping="Wrap" FontSize="12" LineHeight="20" Foreground="{DynamicResource Sub}"
+                                               Text="Текст идёт в такт песне, которая играет сейчас (Spotify, Яндекс Музыка, SoundCloud и др.).&#x0a;✥ — перетащить окно, ☰ — настройки (размер, цвет, выравнивание, синхронизация), ✕ — закрыть.&#x0a;Ctrl + колесо мыши — размер текста, правая кнопка мыши — меню.&#x0a;Приложение Lyrics Overlay сделано другом, внутри Nowring оно работает как отдельное окно."/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
                 <TabItem Style="{StaticResource WarpTabStyle}">
                     <TabItem.Header>
                         <StackPanel Orientation="Horizontal">
@@ -489,8 +526,14 @@
                             <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
                                 <StackPanel>
                                     <TextBlock Text="АКЦЕНТНЫЙ ЦВЕТ" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Переключатели, вкладки и фон на главной" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,0,0,12"/>
+                                    <TextBlock Text="Переключатели, вкладки и фон на главной. «Авто»: цвет подстраивается под играющий трек" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,0,0,12"/>
                                     <WrapPanel x:Name="AccentPanel"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,16" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="ЯЗЫК" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
+                                    <StackPanel x:Name="LangPanel" Orientation="Horizontal"/>
                                 </StackPanel>
                             </Border>
                             <Border Background="{DynamicResource CoverBg}" CornerRadius="10" Padding="16" Margin="0,0,0,0" BorderBrush="{DynamicResource Edge}" BorderThickness="1">
@@ -525,6 +568,23 @@
                                     <CheckBox x:Name="CoversCb" Content="Показывать обложки" Click="OnToggle"/>
                                     <CheckBox x:Name="VideoMusicCb" Content="YouTube как музыка (с полосой прогресса)" Click="OnToggle"/>
                                     <CheckBox x:Name="ButtonCb" Content="Кнопка «Открыть в…» в карточке" Click="OnToggle"/>
+                                    <CheckBox x:Name="WebCb" Content="Discord в браузере (нужен Vencord, см. README)" Click="OnToggle"/>
+                                    <CheckBox x:Name="ArtistCb" Content="Показывать исполнителя" Click="OnToggle"/>
+                                    <CheckBox x:Name="AlbumCb" Content="Показывать альбом / плейлист" Click="OnToggle"/>
+                                    <CheckBox x:Name="BadgeCb" Content="Значок приложения на обложке (Spotify, YouTube…)" Click="OnToggle"/>
+                                    <TextBlock Text="КАРТОЧКА" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,12,0,8"/>
+                                    <CheckBox x:Name="TaLineCb" Content="Название и исполнитель в одной строке" Click="OnToggle"/>
+                                    <CheckBox x:Name="AaLineCb" Content="Исполнитель и альбом в одной строке" Click="OnToggle"/>
+                                    <CheckBox x:Name="SwapCb" Content="Поменять местами название и исполнителя" Click="OnToggle"/>
+                                    <TextBlock Text="Приставка к исполнителю" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,10,0,6"/>
+                                    <StackPanel x:Name="ArtistPrefixPanel" Orientation="Horizontal"/>
+                                    <TextBlock Text="Приставка к альбому" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,10,0,6"/>
+                                    <StackPanel x:Name="AlbumPrefixPanel" Orientation="Horizontal" Margin="0,0,0,6"/>
+                                    <CheckBox x:Name="AlbumNoArtistCb" Content="Показывать альбом, когда исполнителя нет" Click="OnToggle"/>
+                                    <CheckBox x:Name="ProgressCb" Content="Показывать время воспроизведения" Click="OnToggle"/>
+                                    <CheckBox x:Name="HideInfoCb" Content="Не показывать никакой информации о песне" Click="OnToggle"/>
+                                    <TextBlock Text="Вебхук для обложек (необязательно, см. README)" FontSize="11" Foreground="{DynamicResource Muted}" Margin="0,10,0,4"/>
+                                    <TextBox x:Name="WebhookBox" MaxLength="200" TextChanged="OnWebhook"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -552,6 +612,8 @@
                                     <CheckBox x:Name="CustomOnCb" Content="Включить свой статус" Click="OnToggle"/>
                                     <CheckBox x:Name="CustomOverCb" Content="Показывать вместо музыки" Click="OnToggle"/>
                                     <CheckBox x:Name="CustomTimerCb" Content="Показывать таймер" Click="OnToggle"/>
+                                    <TextBlock Text="Вид карточки в Discord" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,10,0,6"/>
+                                    <StackPanel x:Name="CustomTypePanel" Orientation="Horizontal"/>
                                     <TextBlock Text="Что делаешь" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,12,0,5"/>
                                     <TextBox x:Name="CustomTitleBox" MaxLength="64" TextChanged="OnCustomText"/>
                                     <TextBlock Text="Описание" FontSize="12" Foreground="{DynamicResource Sub}" Margin="0,12,0,5"/>
@@ -588,10 +650,10 @@
                     </TabItem.Header>
                     <StackPanel Margin="10" VerticalAlignment="Center" HorizontalAlignment="Center">
                         <Image Source="assets/logo.png" Width="64" Height="64" Margin="0,0,0,16"/>
-                        <TextBlock Text="Nowring Client" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource Title}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Версия 2.0 · 2026" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Nowring 3.0.0" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource Title}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Версия 3.0.0 · 2026" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" HorizontalAlignment="Center"/>
                         <Button Content="GitHub  ·  zxce1zy/Nowring" Click="OnGitHub" Margin="0,18,0,0" HorizontalAlignment="Center" ToolTip="https://github.com/zxce1zy/Nowring"/>
-                        <TextBlock Text="© 2026 Nowring Client, Inc." Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,16,0,0" HorizontalAlignment="Center"/>
+                        <TextBlock Text="© 2026 Nowring" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,16,0,0" HorizontalAlignment="Center"/>
                     </StackPanel>
                 </TabItem>
 

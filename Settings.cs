@@ -18,6 +18,8 @@ sealed class Settings
     public bool Browser { get; set; } = true;
     public bool Covers { get; set; } = true;
     public bool Autostart { get; set; }
+    /// <summary>Запускать тексты песен (Lyrics Overlay) вместе с Nowring.</summary>
+    public bool LyricsAuto { get; set; }
     public bool Dark { get; set; } = true;
 
     /// <summary>Проверять обновления на GitHub и скачивать их в фоне.</summary>
@@ -31,6 +33,39 @@ sealed class Settings
 
     /// <summary>Кнопка «Открыть в …» в карточке активности.</summary>
     public bool ShowButton { get; set; }
+
+    /// <summary>Маленький значок приложения (Spotify, YouTube…) в углу обложки в Discord.</summary>
+    public bool ShowBadge { get; set; }
+
+    /// <summary>Поддержка Discord в браузере: локальный мост для плагина Vencord (arRPC).</summary>
+    public bool WebBridge { get; set; }
+
+    /// <summary>Язык интерфейса: auto (как в системе), ru, en.</summary>
+    public string Lang { get; set; } = "auto";
+
+    // вид карточки (настройки как в других программах для Discord)
+    public bool TitleArtistOneLine { get; set; }
+    public bool ArtistAlbumOneLine { get; set; }
+    public bool SwapOrder { get; set; }
+    public string ArtistPrefix { get; set; } = "";   // "", "от", "by"
+    public string AlbumPrefix { get; set; } = "";    // "", "в", "on"
+    public bool AlbumNoArtist { get; set; } = true;
+    public bool ShowProgress { get; set; } = true;
+    public bool HideInfo { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ViewSig => $"{TitleArtistOneLine}{ArtistAlbumOneLine}{SwapOrder}{ArtistPrefix}{AlbumPrefix}{AlbumNoArtist}{ShowProgress}{HideInfo}{Lang}";
+
+    /// <summary>Вебхук своего приватного канала Discord: самый надёжный хостинг обложек.</summary>
+    public string Webhook { get; set; } = "";
+
+    /// <summary>Показывать исполнителя в карточке Discord.</summary>
+    public bool ShowArtist { get; set; } = true;
+
+    /// <summary>Показывать альбом / плейлист (третья строка) в карточке Discord.</summary>
+    public bool ShowAlbum { get; set; } = true;
+
+    /// <summary>Вид карточки «Свой статус»: 0 «Играет», 2 «Слушает», 3 «Смотрит».</summary>
+    public int CustomType { get; set; } = 3;
 
     /// <summary>YouTube в Discord как музыка («Слушает», с полосой прогресса), а не «Смотрит».</summary>
     public bool VideoAsMusic { get; set; } = true;
@@ -159,21 +194,21 @@ static class Fmt
     public static string SourceName(string src) => src switch
     {
         "spotify" => "Spotify",
-        "yandex" => "Яндекс Музыка",
+        "yandex" => Loc.T("Яндекс Музыка"),
         "soundcloud" => "SoundCloud",
         "youtube" => "YouTube",
         "telegram" => "Telegram",
-        "custom" => "Свой статус",
-        _ => "Браузер"
+        "custom" => Loc.T("Свой статус"),
+        _ => Loc.T("Браузер")
     };
 
     public static string ButtonLabel(string src) => src switch
     {
-        "spotify" => "Открыть в Spotify",
-        "yandex" => "Открыть в Яндекс Музыке",
-        "soundcloud" => "Открыть в SoundCloud",
-        "youtube" => "Найти на YouTube",
-        "telegram" => "Открыть в Telegram",
-        _ => "Открыть трек"
+        "spotify" => Loc.T("Открыть в Spotify"),
+        "yandex" => Loc.T("Открыть в Яндекс Музыке"),
+        "soundcloud" => Loc.T("Открыть в SoundCloud"),
+        "youtube" => Loc.T("Найти на YouTube"),
+        "telegram" => Loc.T("Открыть в Telegram"),
+        _ => Loc.T("Открыть трек")
     };
 }

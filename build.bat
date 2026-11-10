@@ -1,5 +1,5 @@
 @echo off
-rem Builds a single Nowring.exe into the "out" folder. Needs .NET 8 SDK.
+rem Builds a single Nowring.exe into the "out" folder. Needs .NET 8 SDK (+ Python 3.12 to rebuild Lyrics Overlay).
 cd /d "%~dp0"
 dotnet publish -c Release -o out
 if errorlevel 1 (

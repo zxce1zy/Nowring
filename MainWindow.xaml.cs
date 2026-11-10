@@ -19,6 +19,8 @@ public partial class MainWindow : Window
     bool _closing, _closeDone;
     string? _status;
     bool _init = true;
+    readonly System.Windows.Threading.DispatcherTimer _lyricsTimer = new() { Interval = TimeSpan.FromSeconds(1.5) };
+    DateTime _lyricsClick = DateTime.MinValue;
     readonly DispatcherTimer _customDebounce = new() { Interval = TimeSpan.FromMilliseconds(500) };
 
     static readonly Brush Green = Frozen(0x3B, 0xA5, 0x5D);
@@ -58,30 +60,38 @@ public partial class MainWindow : Window
         BrowserCb.IsChecked = s.Browser;
         EnabledCb.IsChecked = s.Enabled;
         ButtonCb.IsChecked = s.ShowButton;
+        BadgeCb.IsChecked = s.ShowBadge;
+        WebCb.IsChecked = s.WebBridge;
+        WebhookBox.Text = s.Webhook;
+        TaLineCb.IsChecked = s.TitleArtistOneLine;
+        AaLineCb.IsChecked = s.ArtistAlbumOneLine;
+        SwapCb.IsChecked = s.SwapOrder;
+        AlbumNoArtistCb.IsChecked = s.AlbumNoArtist;
+        ProgressCb.IsChecked = s.ShowProgress;
+        HideInfoCb.IsChecked = s.HideInfo;
+        ArtistCb.IsChecked = s.ShowArtist;
+        AlbumCb.IsChecked = s.ShowAlbum;
         VideoMusicCb.IsChecked = s.VideoAsMusic;
         CoversCb.IsChecked = s.Covers;
         DarkCb.IsChecked = s.Dark;
         AutostartCb.IsChecked = s.Autostart;
         AutoUpdCb.IsChecked = s.AutoUpdate;
 
+        LyricsAutoCb.IsChecked = s.LyricsAuto;
+        SyncLyrics();
+        _lyricsTimer.Tick += (_, _) => { if ((DateTime.Now - _lyricsClick).TotalSeconds > 3) SyncLyrics(); };
+        _lyricsTimer.Start();
         CustomOnCb.IsChecked = s.CustomOn;
         CustomOverCb.IsChecked = s.CustomOver;
         CustomTimerCb.IsChecked = s.CustomTimer;
         CustomTitleBox.Text = s.CustomTitle;
         CustomTextBox.Text = s.CustomText;
         UpdatePreview();
-        foreach (var t in Templates.All)
-        {
-            var b = new Button
-            {
-                Tag = t,
-                Margin = new Thickness(0, 0, 8, 8),
-                Content = new TextBlock { Text = t.Emoji + "  " + t.Name }
-            };
-            b.Click += OnTemplate;
-            TplPanel.Children.Add(b);
-        }
+        BuildTemplates();
+        BuildLang();
+        BuildPrefixes();
         BuildAccentPicker();
+        BuildCustomTypes();
         foreach (var tb in new[] { CustomTitleBox, CustomTextBox })
             tb.PreviewMouseLeftButtonDown += (s2, _) => { if (s2 is TextBox x && !x.IsKeyboardFocusWithin) System.Windows.Input.Keyboard.Focus(x); };
         StateChanged += (_, _) =>
@@ -93,6 +103,7 @@ public partial class MainWindow : Window
         HomeBg.SizeChanged += (_, e) =>
             HomeBg.Clip = new RectangleGeometry(new Rect(0, 0, e.NewSize.Width, e.NewSize.Height), 11, 11);
         _customDebounce.Tick += (_, _) => { _customDebounce.Stop(); ApplyCustomText(); };
+        Loc.Apply(this);
         _init = false;
 
         Loaded += (_, _) =>
@@ -216,8 +227,8 @@ public partial class MainWindow : Window
         UpdateBar.Visibility = v != null ? Visibility.Visible : Visibility.Collapsed;
         if (v == null) return;
         bool ready = Updater.ReadyPath != null;
-        UpdText.Text = "Доступна версия " + v;
-        UpdNow.Content = ready ? "Обновить" : Updater.Installed ? "Скачивается…" : "Скачать";
+        UpdText.Text = Loc.T("Доступна версия ") + v;
+        UpdNow.Content = Loc.T(ready ? "Обновить" : Updater.Installed ? "Скачивается…" : "Скачать");
         UpdNow.IsEnabled = ready || !Updater.Installed;
     }
 
@@ -259,18 +270,18 @@ public partial class MainWindow : Window
             b.Click += (_, _) => { popup.IsOpen = false; act(); };
             box.Children.Add(b);
         }
-        Item("🐞  Сообщить о проблеме", () => Open(RepoUrl + "/issues/new?title=" + Uri.EscapeDataString("Проблема: ")));
-        Item("💡  Предложить идею", () => Open(RepoUrl + "/issues/new?title=" + Uri.EscapeDataString("Идея: ")));
-        Item("📄  Открыть журнал ошибок", () => Log.Open());
-        Item("📋  Скопировать данные для отчёта", () =>
+        Item(Loc.T("🐞  Сообщить о проблеме"), () => Open(RepoUrl + "/issues/new?title=" + Uri.EscapeDataString("Проблема: ")));
+        Item(Loc.T("💡  Предложить идею"), () => Open(RepoUrl + "/issues/new?title=" + Uri.EscapeDataString("Идея: ")));
+        Item(Loc.T("📄  Открыть журнал ошибок"), () => Log.Open());
+        Item(Loc.T("📋  Скопировать данные для отчёта"), () =>
         {
             try
             {
-                Clipboard.SetText("Nowring 2.0 · " + Environment.OSVersion.VersionString + " · .NET " + Environment.Version);
+                Clipboard.SetText("Nowring 3.0.0 · " + Environment.OSVersion.VersionString + " · .NET " + Environment.Version);
             }
             catch { }
         });
-        Item("⭐  Страница на GitHub", () => Open(RepoUrl));
+        Item(Loc.T("⭐  Страница на GitHub"), () => Open(RepoUrl));
         var card = new Border { Padding = new Thickness(8), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Margin = new Thickness(8), Child = box };
         card.SetResourceReference(Border.BackgroundProperty, "Panel");
         card.SetResourceReference(Border.BorderBrushProperty, "Edge");
@@ -292,17 +303,17 @@ public partial class MainWindow : Window
         if (!_s.HasClientId)
         {
             DiscordDot.Fill = Red;
-            DiscordText.Text = "не задан Application ID (Config.cs)";
+            DiscordText.Text = Loc.T("не задан Application ID (Config.cs)");
         }
         else if (!_s.Enabled)
         {
             DiscordDot.Fill = Gray;
-            DiscordText.Text = "статус выключен";
+            DiscordText.Text = Loc.T("статус выключен");
         }
         else
         {
             DiscordDot.Fill = _svc.DiscordConnected ? Green : Gray;
-            DiscordText.Text = _svc.DiscordConnected ? "Discord подключён" : "Discord не найден";
+            DiscordText.Text = Loc.T(_svc.DiscordConnected ? "Discord подключён" : "Discord не найден");
         }
 
         if (_status != DiscordText.Text)
@@ -313,7 +324,7 @@ public partial class MainWindow : Window
 
         if (t == null)
         {
-            TitleText.Text = "Ничего не играет";
+            TitleText.Text = Loc.T("Ничего не играет");
             ArtistText.Text = "";
             SourceChip.Visibility = Visibility.Collapsed;
             Hint.Visibility = Visibility.Collapsed;
@@ -338,11 +349,12 @@ public partial class MainWindow : Window
         SourceChip.Visibility = Visibility.Visible;
         Hint.Visibility = t.Source == "spotify" && !_s.HideHint ? Visibility.Visible : Visibility.Collapsed;
 
-        if (_coverKey != t.Key)
+        var coverPath = CoverCache.GetPath(t.Key);
+        if (_coverKey != coverPath)
         {
-            var img = LoadCover(CoverCache.GetPath(t.Key));
+            var img = LoadCover(coverPath);
             CoverBrush.ImageSource = img;
-            _coverKey = img != null ? t.Key : null;
+            _coverKey = img != null ? coverPath : null;
             if (img != null)
                 CoverBrush.BeginAnimation(Brush.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300)));
             var cc = img != null ? CoverColors(img) : null;
@@ -462,6 +474,16 @@ public partial class MainWindow : Window
         _s.Covers = CoversCb.IsChecked == true;
         _s.Enabled = EnabledCb.IsChecked == true;
         _s.ShowButton = ButtonCb.IsChecked == true;
+        _s.ShowBadge = BadgeCb.IsChecked == true;
+        _s.WebBridge = WebCb.IsChecked == true;
+        _s.TitleArtistOneLine = TaLineCb.IsChecked == true;
+        _s.ArtistAlbumOneLine = AaLineCb.IsChecked == true;
+        _s.SwapOrder = SwapCb.IsChecked == true;
+        _s.AlbumNoArtist = AlbumNoArtistCb.IsChecked == true;
+        _s.ShowProgress = ProgressCb.IsChecked == true;
+        _s.HideInfo = HideInfoCb.IsChecked == true;
+        _s.ShowArtist = ArtistCb.IsChecked == true;
+        _s.ShowAlbum = AlbumCb.IsChecked == true;
         _s.VideoAsMusic = VideoMusicCb.IsChecked == true;
         bool customOn = CustomOnCb.IsChecked == true;
         if (customOn && !_s.CustomOn) _s.CustomStart = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -483,7 +505,7 @@ public partial class MainWindow : Window
 
     static readonly (string Name, string Hex)[] AccentColors =
     {
-        ("Бирюзовый", "#14C9A3"), ("Синий", "#3B82F6"), ("Зелёный", "#22C55E"), ("Красный", "#EF4444"),
+        ("Авто: под цвет трека", "auto"), ("Бирюзовый", "#14C9A3"), ("Синий", "#3B82F6"), ("Зелёный", "#22C55E"), ("Красный", "#EF4444"),
         ("Оранжевый", "#F97316"), ("Жёлтый", "#EAB308"), ("Розовый", "#EC4899"), ("Фиолетовый", "#8B5CF6"),
     };
 
@@ -498,11 +520,11 @@ public partial class MainWindow : Window
             var dot = new System.Windows.Shapes.Ellipse
             {
                 Width = 26, Height = 26,
-                Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex))
+                Fill = hex == "auto" ? AutoBrush() : new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex))
             };
             var g = new Grid
             {
-                Width = 36, Height = 36, Margin = new Thickness(0, 0, 8, 8), Tag = hex, ToolTip = name,
+                Width = 36, Height = 36, Margin = new Thickness(0, 0, 8, 8), Tag = hex, ToolTip = Loc.T(name),
                 Background = Brushes.Transparent, Cursor = System.Windows.Input.Cursors.Hand
             };
             g.Children.Add(ring);
@@ -510,6 +532,127 @@ public partial class MainWindow : Window
             g.MouseLeftButtonUp += OnAccent;
             AccentPanel.Children.Add(g);
         }
+    }
+
+    // ---------- вид карточки «Свой статус» ----------
+
+    static readonly (string Name, int Type)[] CustomTypes = { ("Играет", 0), ("Слушает", 2), ("Смотрит", 3) };
+
+    void BuildCustomTypes()
+    {
+        CustomTypePanel.Children.Clear();
+        foreach (var (name, type) in CustomTypes)
+        {
+            var b = new Button { Content = Loc.T(name), Margin = new Thickness(0, 0, 8, 0), Tag = type };
+            if (type == _s.CustomType)
+            {
+                b.SetResourceReference(Control.BackgroundProperty, "TabSel");
+                b.SetResourceReference(Control.ForegroundProperty, "TabSelText");
+            }
+            b.Click += (s2, _) =>
+            {
+                if (s2 is not FrameworkElement { Tag: int tp }) return;
+                _s.CustomType = tp;
+                _s.Save();
+                BuildCustomTypes();
+                _svc.Schedule();
+            };
+            CustomTypePanel.Children.Add(b);
+        }
+    }
+
+    void BuildTemplates()
+    {
+        TplPanel.Children.Clear();
+        foreach (var t in Templates.All)
+        {
+            var b = new Button
+            {
+                Tag = t,
+                Margin = new Thickness(0, 0, 8, 8),
+                Content = new TextBlock { Text = t.Emoji + "  " + Loc.T(t.Name) }
+            };
+            b.Click += OnTemplate;
+            TplPanel.Children.Add(b);
+        }
+    }
+
+    // ---------- язык ----------
+
+    void BuildLang()
+    {
+        LangPanel.Children.Clear();
+        foreach (var (name, code) in new[] { ("Авто", "auto"), ("Русский", "ru"), ("English", "en") })
+        {
+            var b = new Button { Content = Loc.T(name), Margin = new Thickness(0, 0, 8, 0), Tag = code };
+            if (code == _s.Lang)
+            {
+                b.SetResourceReference(Control.BackgroundProperty, "TabSel");
+                b.SetResourceReference(Control.ForegroundProperty, "TabSelText");
+            }
+            b.Click += (s2, _) =>
+            {
+                if (s2 is not FrameworkElement { Tag: string c }) return;
+                _s.Lang = c;
+                _s.Save();
+                Loc.Set(c);
+                ApplyLang();
+                Loc.Notify();
+                _svc.Schedule();
+            };
+            LangPanel.Children.Add(b);
+        }
+    }
+
+    void BuildPrefixes()
+    {
+        Chips(ArtistPrefixPanel, new[] { "", "от", "by" }, _s.ArtistPrefix, v => _s.ArtistPrefix = v);
+        Chips(AlbumPrefixPanel, new[] { "", "в", "on" }, _s.AlbumPrefix, v => _s.AlbumPrefix = v);
+    }
+
+    void Chips(Panel panel, string[] values, string current, Action<string> set)
+    {
+        panel.Children.Clear();
+        foreach (var v in values)
+        {
+            var b = new Button { Content = v.Length == 0 ? Loc.T("Нет") : v, Margin = new Thickness(0, 0, 8, 0), Tag = v };
+            if (v == current)
+            {
+                b.SetResourceReference(Control.BackgroundProperty, "TabSel");
+                b.SetResourceReference(Control.ForegroundProperty, "TabSelText");
+            }
+            b.Click += (s2, _) =>
+            {
+                if (s2 is not FrameworkElement { Tag: string val }) return;
+                set(val);
+                _s.Save();
+                BuildPrefixes();
+                _svc.Schedule();
+            };
+            panel.Children.Add(b);
+        }
+    }
+
+    void ApplyLang()
+    {
+        Loc.Apply(this);
+        BuildTemplates();
+        BuildLang();
+        BuildPrefixes();
+        BuildAccentPicker();
+        BuildCustomTypes();
+        SyncUpdate();
+        UpdatePreview();
+        Render();
+    }
+
+    static Brush AutoBrush()
+    {
+        var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+        string[] cs = { "#14C9A3", "#3B82F6", "#8B5CF6", "#EC4899", "#F97316" };
+        for (int i = 0; i < cs.Length; i++)
+            b.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(cs[i]), i / (cs.Length - 1.0)));
+        return b;
     }
 
     void OnAccent(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -521,7 +664,43 @@ public partial class MainWindow : Window
         BuildAccentPicker();
     }
 
+    // ---------- тексты песен (Lyrics Overlay) ----------
+
+    void SyncLyrics()
+    {
+        bool on = LyricsHost.Running;
+        LyricsOnCb.IsChecked = on;
+        LyricsStatus.Text = Loc.T(on ? "Работает: окно с текстом на экране" : "Выключено");
+    }
+
+    async void OnLyricsToggle(object sender, RoutedEventArgs e)
+    {
+        _lyricsClick = DateTime.Now;
+        _s.LyricsAuto = LyricsAutoCb.IsChecked == true;
+        _s.Save();
+        if (!ReferenceEquals(sender, LyricsOnCb)) return;
+
+        bool want = LyricsOnCb.IsChecked == true;
+        LyricsStatus.Text = Loc.T(want ? "Запускаю…" : "Закрываю…");
+        bool ok = await System.Threading.Tasks.Task.Run(() =>
+        {
+            if (want) return LyricsHost.Start();
+            LyricsHost.Stop();
+            return true;
+        });
+        _lyricsClick = DateTime.MinValue;
+        if (!ok) LyricsStatus.Text = Loc.T("Не удалось запустить (подробности в журнале ошибок)");
+        else SyncLyrics();
+    }
+
     // ---------- свой статус ----------
+
+    void OnWebhook(object sender, TextChangedEventArgs e)
+    {
+        if (_init) return;
+        _s.Webhook = WebhookBox.Text.Trim();
+        _s.Save();
+    }
 
     void OnCustomText(object sender, TextChangedEventArgs e)
     {
@@ -542,15 +721,15 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).Tag is not Tpl t) return;
         _customDebounce.Stop();
-        _s.CustomTitle = t.Title;
-        _s.CustomText = t.Text;
+        _s.CustomTitle = Loc.T(t.Title);
+        _s.CustomText = Loc.T(t.Text);
         _s.CustomImage = "tpl:" + t.Id;
         _s.CustomOn = true;
         _s.CustomStart = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         _s.Save();
         _init = true;
-        CustomTitleBox.Text = t.Title;
-        CustomTextBox.Text = t.Text;
+        CustomTitleBox.Text = Loc.T(t.Title);
+        CustomTextBox.Text = Loc.T(t.Text);
         CustomOnCb.IsChecked = true;
         _init = false;
         UpdatePreview();
@@ -561,8 +740,8 @@ public partial class MainWindow : Window
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Картинка для статуса",
-            Filter = "Изображения|*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif"
+            Title = Loc.T("Картинка для статуса"),
+            Filter = Loc.T("Изображения") + "|*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif"
         };
         if (dlg.ShowDialog(this) != true) return;
         try

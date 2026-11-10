@@ -2,7 +2,7 @@
 ; Сборка: installer\make-installer.bat или GitHub Actions (см. .github/workflows/build.yml)
 
 #ifndef MyAppVersion
-  #define MyAppVersion "2.0.0"
+  #define MyAppVersion "3.0.0"
 #endif
 
 [Setup]

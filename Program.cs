@@ -86,6 +86,8 @@ sealed class App : Application
         _s.Autostart = Autostart.IsEnabled();
         if (_s.Autostart) Autostart.Set(true);
 
+        Loc.Set(_s.Lang);
+        Loc.Changed += RefreshLang;
         Theme.Apply(_s.Dark, _s.Accent);
         _svc = new PresenceService(_s);
 
@@ -97,7 +99,7 @@ sealed class App : Application
         _tray = new Forms.NotifyIcon
         {
             Icon = _trayOn ? _iconOn : _iconOff,
-            Text = _trayOn ? "Nowring" : "Nowring (статус выключен)",
+            Text = _trayOn ? "Nowring" : Loc.T("Nowring (статус выключен)"),
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
@@ -118,11 +120,13 @@ sealed class App : Application
         Updater.Changed += () => Dispatcher.BeginInvoke(new Action(SyncUpdateItem));
         _ = Updater.LoopAsync(_s);
         Started = true;
+        if (_s.LyricsAuto) _ = System.Threading.Tasks.Task.Run(() => LyricsHost.Start());
         Dispatcher.BeginInvoke(new Action(Trim), DispatcherPriority.ApplicationIdle);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        LyricsHost.StopOwned();
         _showWait?.Unregister(null);
         _showEvent?.Dispose();
         if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
@@ -147,13 +151,13 @@ sealed class App : Application
         });
         m.Items.Add(new Forms.ToolStripSeparator());
 
-        m.Items.Add("Открыть", null, (_, _) => ShowWindow());
+        _openItem = m.Items.Add(Loc.T("Открыть"), null, (_, _) => ShowWindow());
 
         _enabledItem = new Forms.ToolStripMenuItem();
         _enabledItem.Click += (_, _) => ToggleEnabled();
         m.Items.Add(_enabledItem);
-        m.Items.Add("Журнал ошибок", null, (_, _) => Log.Open());
-        _updateItem = new Forms.ToolStripMenuItem("Обновить") { Visible = false };
+        _logItem = m.Items.Add(Loc.T("Журнал ошибок"), null, (_, _) => Log.Open());
+        _updateItem = new Forms.ToolStripMenuItem(Loc.T("Обновить")) { Visible = false };
         _updateItem.Click += (_, _) =>
         {
             if (Updater.ReadyPath != null) { if (Updater.Install()) Shutdown(); }
@@ -162,7 +166,7 @@ sealed class App : Application
         m.Items.Add(_updateItem);
 
         m.Items.Add(new Forms.ToolStripSeparator());
-        m.Items.Add("Выйти", null, (_, _) => Shutdown());
+        _quitItem = m.Items.Add(Loc.T("Выйти"), null, (_, _) => Shutdown());
 
         // пункты повыше, чтобы закруглённая подсветка смотрелась аккуратно
         foreach (var it in m.Items)
@@ -188,16 +192,29 @@ sealed class App : Application
         _svc.Schedule();
     }
 
+    Forms.ToolStripItem? _openItem, _logItem, _quitItem;
+
+    /// <summary>Перевести меню трея после смены языка.</summary>
+    internal void RefreshLang()
+    {
+        if (_openItem != null) _openItem.Text = Loc.T("Открыть");
+        if (_logItem != null) _logItem.Text = Loc.T("Журнал ошибок");
+        if (_quitItem != null) _quitItem.Text = Loc.T("Выйти");
+        SyncUpdateItem();
+        UpdateEnabledItem();
+        if (_tray != null) _tray.Text = _trayOn ? "Nowring" : Loc.T("Nowring (статус выключен)");
+    }
+
     void SyncUpdateItem()
     {
         var v = Updater.LatestVersion;
         _updateItem.Visible = v != null;
         if (v != null)
-            _updateItem.Text = Updater.ReadyPath != null ? "Обновить до " + v : "Доступна версия " + v + " (открыть)";
+            _updateItem.Text = Updater.ReadyPath != null ? Loc.T("Обновить до ") + v : Loc.T("Доступна версия ") + v + Loc.T(" (открыть)");
     }
 
     void UpdateEnabledItem() =>
-        _enabledItem.Text = (_s.Enabled ? "✓  " : "     ") + "Статус активности";
+        _enabledItem.Text = (_s.Enabled ? "✓  " : "     ") + Loc.T("Статус активности");
 
     // выключенный статус: иконка в трее бледная и тёмная
     void SyncIcon()
@@ -205,7 +222,7 @@ sealed class App : Application
         if (_tray == null || _s.Enabled == _trayOn) return;
         _trayOn = _s.Enabled;
         _tray.Icon = _trayOn ? _iconOn : _iconOff;
-        _tray.Text = _trayOn ? "Nowring" : "Nowring (статус выключен)";
+        _tray.Text = _trayOn ? "Nowring" : Loc.T("Nowring (статус выключен)");
     }
 
     // Обычное окно: перетаскивается, сворачивается, есть на панели задач. Создаётся при открытии,

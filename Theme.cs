@@ -13,14 +13,13 @@ static class Theme
     public static string AccentHex { get; private set; } = DefaultAccent;
     public static event Action? Changed;
 
+    public static bool AutoAccent => string.Equals(AccentHex, "auto", StringComparison.OrdinalIgnoreCase);
+
     public static void Apply(bool dark, string? accent = null)
     {
         Dark = dark;
         if (!string.IsNullOrWhiteSpace(accent)) AccentHex = accent;
-        var ac = ParseOr(AccentHex, DefaultAccent);
-        var r = Application.Current.Resources;
-        void Set(string key, string hex) => Put(key, new SolidColorBrush(Hex(hex)));
-        void Put(string key, Brush b) { if (b.CanFreeze) b.Freeze(); r[key] = b; }
+        void Set(string key, string hex) => SetRes(key, new SolidColorBrush(Hex(hex)));
 
         if (dark)
         {
@@ -31,10 +30,7 @@ static class Theme
             Set("Side", "#18181B"); Set("Panel", "#18181B");
             // главная: тёмная «плазма»
             Set("HomeBase", "#05060E"); Set("HomeSub", "#DCE7EE"); Set("HomeMuted", "#AEBFCB");
-            Set("HomeTrack", "#33FFFFFF"); Set("HomeFill", "#F2FFFFFF");
-            Set("Chip", "#33FFFFFF"); Set("ChipText", "#FFFFFF");
-            Put("TabSel", new SolidColorBrush(Alpha(ac, 0x30)));
-            Put("TabSelText", new SolidColorBrush(Mix(ac, Colors.White, 0.35)));
+            Set("HomeTrack", "#33FFFFFF");
         }
         else
         {
@@ -45,33 +41,50 @@ static class Theme
             Set("Side", "#EFEFF4"); Set("Panel", "#FFFFFF");
             Set("HomeBase", "#F3F6FA"); Set("HomeSub", "#5C5C68"); Set("HomeMuted", "#84848F");
             Set("HomeTrack", "#DCDCE4");
-            Put("HomeFill", new SolidColorBrush(ac));
-            var dk = Mix(ac, Colors.Black, 0.3);
-            Put("Chip", new SolidColorBrush(Alpha(ac, 0x28)));
-            Put("ChipText", new SolidColorBrush(dk));
-            Put("TabSel", new SolidColorBrush(Alpha(ac, 0x28)));
-            Put("TabSelText", new SolidColorBrush(dk));
         }
-
-        // акцент
-        Put("Accent", new SolidColorBrush(ac));
-        var grad = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
-        grad.GradientStops.Add(new GradientStop(ac, 0));
-        grad.GradientStops.Add(new GradientStop(Hue(ac, 25), 1));
-        Put("AccentGrad", grad);
-
-        _bgShown = false;   // смена темы/акцента: цвета фона ставим сразу
-        UpdateBackground(false);
 
         var edge = dark ? Hex("#030308") : Hex("#F3F6FA");
         var vg = new RadialGradientBrush();
         vg.GradientStops.Add(new GradientStop(Alpha(edge, 0), 0));
         vg.GradientStops.Add(new GradientStop(Alpha(edge, 0), 0.5));
         vg.GradientStops.Add(new GradientStop(Alpha(edge, dark ? (byte)0xE6 : (byte)0xD9), 1));
-        Put("Vignette", vg);
+        SetRes("Vignette", vg);
+
+        _bgShown = false;   // смена темы/акцента: цвета ставим сразу, без плавного перехода
+        UpdateBackground(false);
 
         Changed?.Invoke();
     }
+
+    /// <summary>Всё, что зависит от акцентного цвета (в режиме «Авто» он плавно меняется вместе с обложкой).</summary>
+    static void PublishAccent(Color ac)
+    {
+        SetRes("Accent", new SolidColorBrush(ac));
+        var grad = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+        grad.GradientStops.Add(new GradientStop(ac, 0));
+        grad.GradientStops.Add(new GradientStop(Hue(ac, 25), 1));
+        SetRes("AccentGrad", grad);
+
+        if (Dark)
+        {
+            SetRes("HomeFill", new SolidColorBrush(Hex("#F2FFFFFF")));
+            SetRes("Chip", new SolidColorBrush(Hex("#33FFFFFF")));
+            SetRes("ChipText", new SolidColorBrush(Colors.White));
+            SetRes("TabSel", new SolidColorBrush(Alpha(ac, 0x30)));
+            SetRes("TabSelText", new SolidColorBrush(Mix(ac, Colors.White, 0.35)));
+        }
+        else
+        {
+            var dk = Mix(ac, Colors.Black, 0.3);
+            SetRes("HomeFill", new SolidColorBrush(ac));
+            SetRes("Chip", new SolidColorBrush(Alpha(ac, 0x28)));
+            SetRes("ChipText", new SolidColorBrush(dk));
+            SetRes("TabSel", new SolidColorBrush(Alpha(ac, 0x28)));
+            SetRes("TabSelText", new SolidColorBrush(dk));
+        }
+    }
+
+    static Color AccentTarget() => AutoAccent ? (_cvMain ?? Hex(DefaultAccent)) : ParseOr(AccentHex, DefaultAccent);
 
     // ---------- цветовые помощники
 
@@ -135,9 +148,9 @@ static class Theme
     static readonly string[] GlowKeys = { "GlowMain", "GlowHi", "GlowB", "GlowD", "GlowC" };
     static Color? _cvMain, _cvSecond;
     static bool _bgShown;
-    static Color[] _cur = new Color[6];    // 5 пятен + цвет лучей
-    static Color[] _from = new Color[6];
-    static Color[] _to = new Color[6];
+    static Color[] _cur = new Color[7];    // 5 пятен + цвет лучей + акцент
+    static Color[] _from = new Color[7];
+    static Color[] _to = new Color[7];
     static DateTime _t0;
     static DispatcherTimer? _tm;
     const double FadeMs = 1100;
@@ -166,11 +179,12 @@ static class Theme
         sb.GradientStops.Add(new GradientStop(Alpha(_cur[5], sa), 0.5));
         sb.GradientStops.Add(new GradientStop(Alpha(_cur[5], 0), 1));
         SetRes("Streak", sb);
+        PublishAccent(_cur[6]);
     }
 
     static void UpdateBackground(bool animate)
     {
-        var ac = ParseOr(AccentHex, DefaultAccent);
+        var ac = AccentTarget();
         var m = _cvMain ?? ac;
         Color blue, deep, violet;
         if (_cvMain != null)
@@ -186,7 +200,7 @@ static class Theme
             deep = Mix(ac, Hex("#0B1E8C"), 0.7);
             violet = Mix(ac, Hex("#B01CC8"), 0.6);
         }
-        _to = new[] { m, Mix(m, Colors.White, 0.4), blue, deep, violet, Dark ? Mix(m, Colors.White, 0.75) : m };
+        _to = new[] { m, Mix(m, Colors.White, 0.4), blue, deep, violet, Dark ? Mix(m, Colors.White, 0.75) : m, ac };
 
         _tm?.Stop();
         if (!animate || !_bgShown)

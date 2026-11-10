@@ -120,6 +120,27 @@ static class BrowserSites
         return res;
     }
 
+    /// <summary>
+    /// Spotify отдаёт в системное управление мультимедиа только первого исполнителя, а в заголовке окна
+    /// пишет всех («A, B - Название»). Берём полный список, если он начинается с того же исполнителя.
+    /// </summary>
+    public static string? SpotifyArtists(string title, string artist)
+    {
+        try
+        {
+            string suffix = " - " + title;
+            foreach (var h in FindWindows(new[] { "Spotify" }))
+            {
+                var wt = WindowTitle(h);
+                if (!wt.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
+                var list = wt[..^suffix.Length].Trim();
+                if (list.Length > artist.Length && list.StartsWith(artist, StringComparison.OrdinalIgnoreCase)) return list;
+            }
+        }
+        catch { }
+        return null;
+    }
+
     static string[] ProcNames(string aumid)
     {
         var a = aumid.ToLowerInvariant();
