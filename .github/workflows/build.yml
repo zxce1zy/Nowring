@@ -19,6 +19,13 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build Lyrics Overlay
+        run: python lyrics/source/build_exe.py --auto
+
       - name: Version
         id: ver
         shell: pwsh
@@ -28,6 +35,20 @@ jobs:
 
       - name: Build Nowring.exe
         run: dotnet publish -c Release -o out -p:Version=${{ steps.ver.outputs.version }}
+
+      # Подпись кода (необязательно): добавьте секреты CODESIGN_PFX (файл .pfx в base64) и CODESIGN_PASSWORD.
+      # Без секретов шаги пропускаются, релиз собирается неподписанным.
+      - name: Sign Nowring.exe
+        if: ${{ env.CODESIGN_PFX != '' }}
+        shell: pwsh
+        env:
+          CODESIGN_PFX: ${{ secrets.CODESIGN_PFX }}
+          CODESIGN_PASSWORD: ${{ secrets.CODESIGN_PASSWORD }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:CODESIGN_PFX))
+          $st = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          & $st sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODESIGN_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 out\Nowring.exe
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
 
       - name: Build installer (Inno Setup)
         shell: pwsh
@@ -43,6 +64,17 @@ jobs:
           if (-not $iscc) { throw "ISCC.exe not found" }
           & $iscc "/DMyAppVersion=${{ steps.ver.outputs.version }}" installer\Nowring.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+
+      - name: Sign installer
+        if: ${{ env.CODESIGN_PFX != '' }}
+        shell: pwsh
+        env:
+          CODESIGN_PFX: ${{ secrets.CODESIGN_PFX }}
+          CODESIGN_PASSWORD: ${{ secrets.CODESIGN_PASSWORD }}
+        run: |
+          $st = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          & $st sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODESIGN_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 (Get-ChildItem dist\Nowring-Setup-*.exe).FullName
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
 
       - name: Portable zip
         shell: pwsh
