@@ -12,6 +12,9 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      CODESIGN_PFX: ${{ secrets.CODESIGN_PFX }}
+      CODESIGN_PASSWORD: ${{ secrets.CODESIGN_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +27,8 @@ jobs:
           python-version: '3.12'
 
       - name: Build Lyrics Overlay
+        env:
+          PYTHONUTF8: '1'
         run: python lyrics/source/build_exe.py --auto
 
       - name: Version
@@ -41,9 +46,6 @@ jobs:
       - name: Sign Nowring.exe
         if: ${{ env.CODESIGN_PFX != '' }}
         shell: pwsh
-        env:
-          CODESIGN_PFX: ${{ secrets.CODESIGN_PFX }}
-          CODESIGN_PASSWORD: ${{ secrets.CODESIGN_PASSWORD }}
         run: |
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:CODESIGN_PFX))
           $st = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
@@ -68,9 +70,6 @@ jobs:
       - name: Sign installer
         if: ${{ env.CODESIGN_PFX != '' }}
         shell: pwsh
-        env:
-          CODESIGN_PFX: ${{ secrets.CODESIGN_PFX }}
-          CODESIGN_PASSWORD: ${{ secrets.CODESIGN_PASSWORD }}
         run: |
           $st = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           & $st sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODESIGN_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 (Get-ChildItem dist\Nowring-Setup-*.exe).FullName
