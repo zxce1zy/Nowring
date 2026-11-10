@@ -72,6 +72,7 @@ public partial class MainWindow : Window
         ArtistCb.IsChecked = s.ShowArtist;
         AlbumCb.IsChecked = s.ShowAlbum;
         VideoMusicCb.IsChecked = s.VideoAsMusic;
+        ShortsCb.IsChecked = s.ShowShorts;
         CoversCb.IsChecked = s.Covers;
         DarkCb.IsChecked = s.Dark;
         AutostartCb.IsChecked = s.Autostart;
@@ -277,7 +278,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                Clipboard.SetText("Nowring 3.0.0 · " + Environment.OSVersion.VersionString + " · .NET " + Environment.Version);
+                Clipboard.SetText("Nowring 3.1.0 · " + Environment.OSVersion.VersionString + " · .NET " + Environment.Version);
             }
             catch { }
         });
@@ -485,6 +486,7 @@ public partial class MainWindow : Window
         _s.ShowArtist = ArtistCb.IsChecked == true;
         _s.ShowAlbum = AlbumCb.IsChecked == true;
         _s.VideoAsMusic = VideoMusicCb.IsChecked == true;
+        _s.ShowShorts = ShortsCb.IsChecked == true;
         bool customOn = CustomOnCb.IsChecked == true;
         if (customOn && !_s.CustomOn) _s.CustomStart = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         _s.CustomOn = customOn;

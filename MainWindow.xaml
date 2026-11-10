@@ -253,7 +253,7 @@
             <Grid x:Name="TitleBar" Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnDrag">
                 <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
                     <Image Source="assets/logo.png" Width="20" Height="20" Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text="Nowring 3.0.0" Foreground="{DynamicResource Title}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="Nowring 3.1.0" Foreground="{DynamicResource Title}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                 </StackPanel>
                 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
@@ -566,6 +566,7 @@
                                     <TextBlock Text="DISCORD" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Muted}" Margin="0,0,0,8"/>
                                     <CheckBox x:Name="EnabledCb" Content="Статус активности в Discord" Click="OnToggle"/>
                                     <CheckBox x:Name="CoversCb" Content="Показывать обложки" Click="OnToggle"/>
+                                    <CheckBox x:Name="ShortsCb" Content="Показывать YouTube Shorts" Click="OnToggle"/>
                                     <CheckBox x:Name="VideoMusicCb" Content="YouTube как музыка (с полосой прогресса)" Click="OnToggle"/>
                                     <CheckBox x:Name="ButtonCb" Content="Кнопка «Открыть в…» в карточке" Click="OnToggle"/>
                                     <CheckBox x:Name="WebCb" Content="Discord в браузере (нужен Vencord, см. README)" Click="OnToggle"/>
@@ -650,8 +651,8 @@
                     </TabItem.Header>
                     <StackPanel Margin="10" VerticalAlignment="Center" HorizontalAlignment="Center">
                         <Image Source="assets/logo.png" Width="64" Height="64" Margin="0,0,0,16"/>
-                        <TextBlock Text="Nowring 3.0.0" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource Title}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Версия 3.0.0 · 2026" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Nowring 3.1.0" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource Title}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Версия 3.1.0 · 2026" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" HorizontalAlignment="Center"/>
                         <Button Content="GitHub  ·  zxce1zy/Nowring" Click="OnGitHub" Margin="0,18,0,0" HorizontalAlignment="Center" ToolTip="https://github.com/zxce1zy/Nowring"/>
                         <TextBlock Text="© 2026 Nowring" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,16,0,0" HorizontalAlignment="Center"/>
                     </StackPanel>

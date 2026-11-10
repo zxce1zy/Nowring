@@ -141,6 +141,48 @@ static class BrowserSites
         return null;
     }
 
+    static readonly Dictionary<string, (string? Url, DateTime At)> YtUrls = new();
+
+    /// <summary>
+    /// Адрес открытой вкладки с этим видео (из адресной строки браузера). Работает, пока вкладка с видео
+    /// активна в своём окне (заголовок окна совпадает с названием видео), иначе null.
+    /// </summary>
+    public static string? YouTubeUrl(string aumid, string title)
+    {
+        var key = aumid + "|" + title;
+        lock (YtUrls)
+        {
+            if (YtUrls.TryGetValue(key, out var c) && (c.Url != null || (DateTime.UtcNow - c.At).TotalSeconds < 5)) return c.Url;
+        }
+        string? url = null;
+        try
+        {
+            var t = title.ToLowerInvariant();
+            foreach (var h in FindWindows(ProcNames(aumid)))
+            {
+                if (!WindowTitle(h).ToLowerInvariant().Contains(t)) continue;
+                var root = AutomationElement.FromHandle(h);
+                var cond = new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit);
+                foreach (AutomationElement e in root.FindAll(TreeScope.Descendants, cond))
+                {
+                    if (e.TryGetCurrentPattern(ValuePattern.Pattern, out var pat) && pat is ValuePattern vp)
+                    {
+                        var v = vp.Current.Value ?? "";
+                        if (v.Contains("youtube.com/") || v.Contains("youtu.be/")) { url = v; break; }
+                    }
+                }
+                if (url != null) break;
+            }
+        }
+        catch { }
+        lock (YtUrls)
+        {
+            if (YtUrls.Count > 60) YtUrls.Clear();
+            YtUrls[key] = (url, DateTime.UtcNow);
+        }
+        return url;
+    }
+
     static string[] ProcNames(string aumid)
     {
         var a = aumid.ToLowerInvariant();

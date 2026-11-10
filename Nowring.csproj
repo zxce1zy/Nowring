@@ -12,7 +12,7 @@
     <RootNamespace>Nowring</RootNamespace>
 
     <!-- сведения о программе (версию в CI подставляет тег релиза: -p:Version=...) -->
-    <Version>3.0.0</Version>
+    <Version>3.1.0</Version>
     <Product>Nowring</Product>
     <Authors>zxce1zy</Authors>
     <Description>Music in Discord: Rich Presence for Spotify, Yandex Music and SoundCloud</Description>

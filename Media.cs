@@ -111,6 +111,7 @@ sealed class MediaWatcher
         cands.Sort((x, y) => y.Score.CompareTo(x.Score));
 
         Session? best = null;
+        bool shortsSkipped = false;
         string bestSrc = "", title = "", artist = "", album = "";
         foreach (var (s, src0, _) in cands)
         {
@@ -129,6 +130,12 @@ sealed class MediaWatcher
                 // YouTube: превью, на которое случайно навели мышь, не открыто во вкладке — его пропускаем,
                 // приоритет у большого видео
                 if (src == "youtube" && !matched) continue;
+                if (src == "youtube" && !st.ShowShorts
+                    && BrowserSites.YouTubeUrl(s.SourceAppUserModelId, ti) is { } yurl && yurl.Contains("/shorts/"))
+                {
+                    shortsSkipped = true;      // Shorts выключены в настройках: такое видео не показываем
+                    continue;
+                }
             }
             if (!st.IsEnabled(src)) continue;
             // Telegram: только музыка (у голосовых и кружков нет исполнителя)
@@ -144,7 +151,7 @@ sealed class MediaWatcher
         // Играющий сейчас другой источник (не на паузе) имеет приоритет.
         bool otherPlaying = best != null && bestSrc != "youtube"
             && best.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-        if (_lastYt != null && st.YouTube && (best == null || (bestSrc != "youtube" && !otherPlaying)) && YtAlive())
+        if (_lastYt != null && st.YouTube && !shortsSkipped && (best == null || (bestSrc != "youtube" && !otherPlaying)) && YtAlive())
             return _lastYt;
 
         if (best == null)
@@ -190,6 +197,12 @@ sealed class MediaWatcher
                 }
                 catch { }
                 await Task.Delay(800);
+            }
+            // YouTube: браузер не отдал превью, берём обложку видео с i.ytimg.com
+            if (bestSrc == "youtube")
+            {
+                try { return await YouTubeCover.GetAsync(session.SourceAppUserModelId, title, artist); }
+                catch { }
             }
             return null;
         };

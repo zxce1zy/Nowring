@@ -42,7 +42,7 @@ import requests
 
 try:                                  # сглаженный текст; без Pillow остаётся прежний вывод
     import io
-    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
     PIL_OK = True
 except Exception:
     PIL_OK = False
@@ -106,7 +106,7 @@ TB_H = 4 + ICON_SIZE + 8 + 22 + 4   # высота верхней панели
 CTL_H = MEDIA_SIZE + 10             # высота ряда кнопок плеера
 UI_PAD = 6                    # отступ значков от края окна
 TIP_BG, TIP_BORDER, TIP_FG = "#1F1F1F", "#5A5A5A", "#FFFFFF"   # карточка-подсказка
-SW_W, SW_H = 480, 740         # размер окна настроек
+SW_W, SW_H = 480, 800         # размер окна настроек
 SW_BG, SW_PANEL, SW_FG, SW_MUTED = "#16161A", "#2B2B34", "#FFFFFF", "#8E8E9A"   # палитра Nowring
 SW_CARD, SW_EDGE, SW_HOVER = "#1F1F26", "#2C2C34", "#363641"                    # карточка, рамка, кнопка под мышью
 SW_ON = "#7C54EE"             # выбранная кнопка в окне настроек (фиолетовый, как значок Lyrics)
@@ -114,6 +114,8 @@ CHROME_FADE_SECONDS = 0.22    # плавное появление и скрыт�
 CHROME_SLIDE_PX = 8           # на сколько пикселей кнопки «выезжают» при появлении
 OUTLINE_SOFT = 0.7           # мягкость обводки (размытие, пикселей)
 OUTLINE_GAIN = 1.15           # насыщенность обводки
+KARAOKE_SEC_PER_CHAR = 0.085   # караоке: сколько секунд в среднем уходит на букву (строка не обязана тянуться до следующей)
+KARAOKE_MIN_SEC = 0.9          # самая короткая «спевка» строки
 SMOOTH_SS = 3                 # сглаживание текста: во сколько раз рисуем крупнее, а потом уменьшаем
 SHADE_STEP = 18               # шаг яркости строк (меньше — плавнее затухание, но больше картинок в памяти)
 WIN_FONTS = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
@@ -483,9 +485,52 @@ def fetch_job(track_id, artist, title, duration=None):
         state["status"] = f"Текст не найден: {artist} — {title}  (☰ → «Искать вручную»)"
 
 
+# Браузер при наведении мыши на превью (рекомендации YouTube) подменяет данные плеера: название, позицию
+# и состояние. Настоящее видео открыто во вкладке, и его название есть в заголовке окна браузера,
+# а у превью такого нет. Поэтому превью игнорируем и держим основное видео.
+_user32 = ctypes.windll.user32 if sys.platform == "win32" else None
+_WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p) if _user32 else None
+_BROWSER_CLASSES = ("Chrome_WidgetWin_1", "MozillaWindowClass")          # Chrome/Edge/Opera/Brave и Firefox
+_NOT_BROWSER = ("spotify", "yandexmusic", "yandex music", "itunes", "vlc", "foobar", "aimp", "winamp", "tidal", "deezer")
+
+
+def browser_window_titles():
+    """Заголовки окон браузеров (в них название открытой вкладки), в нижнем регистре."""
+    out = []
+    if not _user32:
+        return out
+
+    def cb(hwnd, _):
+        try:
+            if _user32.IsWindowVisible(hwnd):
+                cls = ctypes.create_unicode_buffer(64)
+                _user32.GetClassNameW(hwnd, cls, 64)
+                if cls.value in _BROWSER_CLASSES:
+                    n = _user32.GetWindowTextLengthW(hwnd)
+                    if n:
+                        buf = ctypes.create_unicode_buffer(n + 1)
+                        _user32.GetWindowTextW(hwnd, buf, n + 1)
+                        out.append(buf.value.lower())
+        except Exception:
+            pass
+        return True
+
+    try:
+        _user32.EnumWindows(_WNDENUMPROC(cb), 0)
+    except Exception:
+        pass
+    return out
+
+
+def guard_needed(aumid):
+    a = (aumid or "").lower()
+    return not any(k in a for k in _NOT_BROWSER)
+
+
 async def poll_forever():
     mgr, mgr_at = None, 0.0
     props_at, title, artist, errors = 0.0, "", "", 0
+    real = []          # [источник, название, исполнитель] настоящего видео браузера (открыто во вкладке)
     while True:
         try:
             # Подключение обновляем регулярно: «старое» подключение могло не заметить плеер,
@@ -495,6 +540,9 @@ async def poll_forever():
                 mgr_at = time.time()
             session = mgr.get_current_session()
             if not session:
+                if real and any(real[1].lower() in w for w in browser_window_titles()):
+                    await asyncio.sleep(0.4)     # браузер на время убрал сессию (превью), основное видео открыто: ждём
+                    continue
                 title, props_at, mgr = "", 0.0, None
                 state.update(track_id=None, synced=[], plain=[], playing=False,
                              status="Включите музыку...")
@@ -505,6 +553,14 @@ async def poll_forever():
                 props = await session.try_get_media_properties_async()
                 title, artist = props.title or "", props.artist or ""
                 props_at = time.time()
+            if guard_needed(session.source_app_user_model_id):
+                titles = browser_window_titles()
+                tl = title.lower()
+                if tl and any(tl in w for w in titles):
+                    real[:] = [session.source_app_user_model_id, title, artist]       # настоящее видео
+                elif real and real[0] == session.source_app_user_model_id and any(real[1].lower() in w for w in titles):
+                    await asyncio.sleep(POLL_SECONDS)       # превью под курсором: оставляем основное видео как есть
+                    continue
             if not title:
                 mgr = None
                 state.update(track_id=None, synced=[], plain=[], playing=False,
@@ -1057,6 +1113,74 @@ class SmoothText:
             m = self.mask_cache[key] = (tm, om, W, H)
         return m
 
+    # ---------- караоке: слева направо подсвечиваем уже спетую часть строки
+    @staticmethod
+    def char_weight(ch):
+        """Сколько «времени пения» занимает символ: гласные — слоги, согласные быстрее, пробел — короткая пауза."""
+        if ch in "аеёиоуыэюяАЕЁИОУЫЭЮЯaeiouyAEIOUY":
+            return 1.0
+        if ch.isspace():
+            return 0.5
+        if ch.isalpha():
+            return 1.0 if ord(ch) >= 0x2E80 else 0.45     # иероглифы и кана — один слог на знак
+        if ch.isdigit():
+            return 0.6
+        return 0.3
+
+    def kprep(self, text, px, aw, align):
+        key = ("k", text, px, aw, align)
+        r = self.layouts.get(key)
+        if r is None:
+            kind, lines, ls = self.layout(text, px, aw)
+            pad, S = self.pad(px), SMOOTH_SS
+            big = self.font(kind, px * S)
+            W, H = aw + 2 * pad, ls * len(lines) + 2 * pad
+            rows = []
+            for line in lines:
+                lw = big.getlength(line) / S
+                x0 = pad if align == "left" else (pad + aw - lw if align == "right" else pad + (aw - lw) / 2)
+                ws = [self.char_weight(c) for c in line]
+                pre = [big.getlength(line[:j]) / S for j in range(len(line) + 1)]
+                rows.append((x0, ws, sum(ws), pre))
+            r = (ls, pad, W, H, rows, sum(w for _, _, w, _ in rows))
+            self.layouts[key] = r
+        return r
+
+    def karaoke_region(self, text, px, aw, align, p):
+        """Маска «уже спето» (L): строки до текущей целиком, у текущей — до нужной буквы, край мягкий."""
+        ls, pad, W, H, rows, total = self.kprep(text, px, aw, align)
+        region = Image.new("L", (W, H), 0)
+        if total <= 0 or p <= 0:
+            return region
+        d = ImageDraw.Draw(region)
+        target = min(1.0, p) * total
+        acc = 0.0
+        last = len(rows) - 1
+        for k, (x0, ws, tot, pre) in enumerate(rows):
+            top = 0 if k == 0 else pad + k * ls
+            bot = H if k == last else pad + (k + 1) * ls
+            if acc + tot <= target + 1e-9:
+                d.rectangle((0, top, W, bot), fill=255)
+                acc += tot
+                continue
+            need, cum, cut = target - acc, 0.0, x0
+            for j, w in enumerate(ws):
+                if cum + w >= need:
+                    frac = (need - cum) / w if w else 0.0
+                    cut = x0 + pre[j] + (pre[j + 1] - pre[j]) * frac
+                    break
+                cum += w
+            soft = max(4, round(px * 0.35))
+            solid = max(0, round(cut - soft))
+            d.rectangle((0, top, solid, bot), fill=255)
+            for i in range(soft):                              # мягкая кромка «волны» караоке
+                x = solid + 1 + i
+                if x >= W:
+                    break
+                d.line((x, top, x, bot), fill=round(255 * (1 - (i + 1) / (soft + 1))))
+            break
+        return region
+
     def photo(self, text, px, aw, align, outline, v, light):
         key = (text, px, aw, align, outline, v, light)
         img = self.images.get(key)
@@ -1291,6 +1415,8 @@ class Overlay:
         self.btn_items = {}        # имя кнопки -> (холст, [id], основной цвет)
         self.btn_imgs = {}         # имя кнопки -> (размер, играет ли) для значков-картинок
         self.icon_cache = {}
+        self.karaoke = bool(self.prefs.get("karaoke", True))           # подсветка спетой части строки (как в караоке)
+        self.kara = None
         self.hide_chrome = bool(self.prefs.get("hide_chrome", True))   # кнопки видны, только пока курсор над окном
         self.chrome_vis = True
         self.chrome_out_at = 0.0
@@ -1379,6 +1505,11 @@ class Overlay:
             self.layer.top.attributes("-topmost", True)
 
     # ---------- меню: выравнивание и подстройка синхронизации
+    def set_karaoke(self, value):
+        self.karaoke = bool(value)
+        self.last_sig = None
+        self.save_prefs()
+
     def set_chrome(self, value):
         self.hide_chrome = bool(value)
         self.save_prefs()
@@ -1392,7 +1523,7 @@ class Overlay:
         self.save_prefs()
 
     def save_prefs(self):
-        self.prefs.update(sync_offset=self.sync_offset, theme=self.theme_pref, hide_chrome=self.hide_chrome,
+        self.prefs.update(sync_offset=self.sync_offset, theme=self.theme_pref, hide_chrome=self.hide_chrome, karaoke=self.karaoke,
                           percent=self.percent)
         try:
             self.prefs.update(pos_x=self.pos[0], pos_y=self.pos[1])
@@ -1729,10 +1860,15 @@ class Overlay:
         hint("Белый — для тёмного фона, тёмный — для светлого")
 
         # кнопки на оверлее
-        f = section("КНОПКИ НА ОВЕРЛЕЕ")
-        button(f, "Скрывать без курсора", act(self.set_chrome, True), 0, "chrome", True)
+        f = section("ОТОБРАЖЕНИЕ")
+        button(f, "Скрывать кнопки без курсора", act(self.set_chrome, True), 0, "chrome", True)
         button(f, "Показывать всегда", act(self.set_chrome, False), 1, "chrome", False)
         hint("Кнопки появляются, когда курсор наведён на текст")
+        f2 = tk.Frame(card_inner, bg=SW_CARD)
+        f2.pack(fill="x", pady=(10, 0))
+        button(f2, "Караоке: по буквам", act(self.set_karaoke, True), 0, "karaoke", True)
+        button(f2, "Вся строка сразу", act(self.set_karaoke, False), 1, "karaoke", False)
+        hint("Караоке: спетая часть строки белая, остальное серое")
 
         # синхронизация
         f = section("СИНХРОНИЗАЦИЯ ТЕКСТА")
@@ -1748,7 +1884,7 @@ class Overlay:
         button(f, "Найти текст заново", self.retry_lyrics, 0)
         button(f, "Искать вручную…", self.manual_search, 1)
 
-        # нижний ряд: «Главное меню» (пока без действия) и «Закрыть приложение»
+        # нижний ряд: «Главное меню» и «Закрыть приложение»
         bottom = tk.Frame(win, bg=SW_BG)
         bottom.pack(side="bottom", fill="x", padx=16, pady=(14, 16))
         bottom.columnconfigure(0, weight=1, uniform="bottom")
@@ -1768,8 +1904,22 @@ class Overlay:
         self.settings_loop()
 
     def back_to_main_menu(self):
-        """Кнопка «← Главное меню». Пока ничего не делает — действие добавим, когда понадобится."""
-        pass
+        """Кнопка «← Главное меню»: просит Nowring показать своё окно и закрывает оверлей."""
+        ok = False
+        try:
+            k32 = ctypes.windll.kernel32
+            k32.OpenEventW.restype = ctypes.c_void_p
+            k32.OpenEventW.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_wchar_p]
+            k32.SetEvent.argtypes = [ctypes.c_void_p]
+            k32.CloseHandle.argtypes = [ctypes.c_void_p]
+            h = k32.OpenEventW(0x0002, False, "Nowring.ShowWindow")      # EVENT_MODIFY_STATE
+            if h:
+                ok = bool(k32.SetEvent(h))
+                k32.CloseHandle(h)
+        except Exception:
+            ok = False
+        if ok:
+            self.root.destroy()                     # Nowring открыл главное окно — оверлей закрываем
 
     def on_sw_configure(self, e):
         if e.widget is self.settings_win:           # окно настроек двигают — запоминаем момент
@@ -1787,7 +1937,7 @@ class Overlay:
         """Обновляет подписи и подсветку выбранных кнопок."""
         if self.settings_win is None:
             return
-        key = (self.percent, round(self.sync_offset, 2), self.align_pref, self.theme_pref, self.hide_chrome)
+        key = (self.percent, round(self.sync_offset, 2), self.align_pref, self.theme_pref, self.hide_chrome, self.karaoke)
         if key == self.sw_key:                      # ничего не изменилось — ничего не перерисовываем
             return
         self.sw_key = key
@@ -1795,7 +1945,7 @@ class Overlay:
             self.sw_pct.configure(text=f"{self.percent}%")
             self.sw_sync.configure(text=f"{self.sync_offset:+.1f} с")
             for (group, value), b in self.sw_btns.items():
-                cur = {"align": self.align_pref, "theme": self.theme_pref, "chrome": self.hide_chrome}[group]
+                cur = {"align": self.align_pref, "theme": self.theme_pref, "chrome": self.hide_chrome, "karaoke": self.karaoke}[group]
                 if cur == value:
                     b.configure(bg=SW_ON, fg="#FFFFFF", activebackground=SW_ON, activeforeground="#FFFFFF")
                 else:
@@ -2168,7 +2318,18 @@ class Overlay:
         else:
             self.focus = self.anim_from + (self.target - self.anim_from) * ease(t)
 
+    def kara_progress(self, synced, idx, pos):
+        """Какая часть строки idx уже спета (0..1): по времени до следующей строки, но не дольше, чем строку реально поют."""
+        t0, text = synced[idx]
+        n = len(text.strip())
+        if n == 0:
+            return None
+        t1 = synced[idx + 1][0] if idx + 1 < len(synced) else t0 + 4.0
+        dur = min(max(0.2, t1 - t0), max(KARAOKE_MIN_SEC, n * KARAOKE_SEC_PER_CHAR))
+        return max(0.0, min(1.0, (pos - t0) / dur))
+
     def get_view(self):
+        self.kara = None
         compact = self.percent <= COMPACT_AT_PERCENT
         before, after = (BEFORE_COMPACT, AFTER_COMPACT) if compact else (BEFORE_NORMAL, AFTER_NORMAL)
 
@@ -2189,6 +2350,10 @@ class Overlay:
                     break
             src = ("sync", state["track_id"])
             self.set_target(idx, src)
+            if self.karaoke:
+                p = self.kara_progress(synced, idx, pos)
+                if p is not None:
+                    self.kara = (idx, p)
             return [l or "♪" for _, l in synced], self.focus, before, after, True, src
 
         plain = state["plain"]
@@ -2342,13 +2507,21 @@ class Overlay:
         try:
             base = Image.new("RGBA", (w, h), (0, 0, 0, 0))
             oc = 255 if self.light else 0
-            for text, x, y, v in draws:
+            for item in draws:
+                text, x, y, v = item[:4]
+                kara = item[4] if len(item) > 4 else None
                 tm, om, W, H = self.smooth.masks(text, px, aw, mode, outline_px)
                 under = Image.new("RGBA", (W, H), (oc, oc, oc, 0))      # мягкая тень под буквами
                 under.putalpha(om.point(lambda a: a * 55 // 100) if self.light else om)   # у тёмного текста ореол слабее
                 top = Image.new("RGBA", (W, H), (v, v, v, 0))
                 top.putalpha(tm)
                 under.alpha_composite(top)
+                if kara is not None:                                    # караоке: спетая часть — ярким цветом поверх серого
+                    p, v_sung = kara
+                    reg = self.smooth.karaoke_region(text, px, aw, mode, p)
+                    hi = Image.new("RGBA", (W, H), (v_sung, v_sung, v_sung, 0))
+                    hi.putalpha(ImageChops.multiply(tm, reg))
+                    under.alpha_composite(hi)
                 self.blit(base, under, x, y)
             self.layer.update(base, self.pos[0], self.pos[1] + TB_H)
         except Exception:
@@ -2414,7 +2587,9 @@ class Overlay:
         lo = max(0, fl - before - 1)
         hi = min(n - 1, ce + after + 1)
 
-        sig = (layout_key, round(focus, 3), lo, hi, before, after)
+        kara = self.kara
+        sig = (layout_key, round(focus, 3), lo, hi, before, after,
+               (kara[0], round(kara[1] * 240)) if kara else None)
         if sig == self.last_sig:
             return
         self.last_sig = sig
@@ -2464,7 +2639,11 @@ class Overlay:
             if it.smooth:
                 x1, y1 = round(box_left - it.pad), round(sy - it.pad)
                 it.rect = (x1, y1, x1 + aw + 2 * it.pad, y1 + self.measure(lines[i]) + 2 * it.pad)
-                draws.append((lines[i], x1, y1, int(color[1:3], 16)))
+                if kara and i == kara[0]:
+                    v_uns = int(shade(1.0, self.light)[1:3], 16)         # ещё не спетое — серым, как следующие строки
+                    draws.append((lines[i], x1, y1, v_uns, (kara[1], int(color[1:3], 16))))
+                else:
+                    draws.append((lines[i], x1, y1, int(color[1:3], 16)))
                 continue
 
             for cid, (ox, oy) in zip(it.outline, self.offsets):

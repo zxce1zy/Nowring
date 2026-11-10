@@ -74,6 +74,7 @@ static class Loc
         ["Не удалось запустить (подробности в журнале ошибок)"] = "Could not start (see the error log)",
         ["Текст идёт в такт песне, которая играет сейчас (Spotify, Яндекс Музыка, SoundCloud и др.).\n✥ — перетащить окно, ☰ — настройки (размер, цвет, выравнивание, синхронизация), ✕ — закрыть.\nCtrl + колесо мыши — размер текста, правая кнопка мыши — меню.\nПриложение Lyrics Overlay сделано другом, внутри Nowring оно работает как отдельное окно."]
             = "Lyrics scroll in time with the song that is playing now (Spotify, Yandex Music, SoundCloud, etc.).\n✥ moves the window, ☰ opens settings (size, color, alignment, sync), ✕ closes it.\nCtrl + mouse wheel changes the text size, right click opens the menu.\nLyrics Overlay was made by a friend; inside Nowring it runs as a separate window.",
+        ["Показывать YouTube Shorts"] = "Show YouTube Shorts",
         ["Свой статус"] = "Custom status", ["О программе"] = "About",
         ["Свернуть"] = "Minimize", ["Закрыть"] = "Close", ["Справка / Отзыв"] = "Help / Feedback",
         ["МУЗЫКА"] = "MUSIC", ["ВИДЕО И МЕССЕНДЖЕРЫ"] = "VIDEO AND MESSENGERS", ["ВНЕШНИЙ ВИД"] = "APPEARANCE",
@@ -114,7 +115,7 @@ static class Loc
         ["Если в Discord видны две активности: Настройки → Подключения → Spotify → выключите «Показывать Spotify как статус». (Нажмите, чтобы скрыть.)"]
             = "If Discord shows two activities: Settings → Connections → Spotify → turn off “Display Spotify as your status”. (Click to hide.)",
         // о программе / обновления
-        ["Версия 3.0.0 · 2026"] = "Version 3.0.0 · 2026", ["Обновить"] = "Update", ["Скачать"] = "Download", ["Скачивается…"] = "Downloading…",
+        ["Версия 3.1.0 · 2026"] = "Version 3.1.0 · 2026", ["Обновить"] = "Update", ["Скачать"] = "Download", ["Скачивается…"] = "Downloading…",
         ["Доступна версия "] = "Version available: ", ["Обновить до "] = "Update to ", [" (открыть)"] = " (open)",
         ["Проверяю…"] = "Checking…", ["Не удалось узнать последнюю версию"] = "Couldn't get the latest version",
         ["У вас последняя версия "] = "You have the latest version ", ["Нет связи с GitHub"] = "Can't reach GitHub",

@@ -70,6 +70,9 @@ sealed class Settings
     /// <summary>YouTube в Discord как музыка («Слушает», с полосой прогресса), а не «Смотрит».</summary>
     public bool VideoAsMusic { get; set; } = true;
 
+    /// <summary>Показывать YouTube Shorts в статусе (по умолчанию выключено).</summary>
+    public bool ShowShorts { get; set; }
+
     /// <summary>Версия настроек (для одноразовых миграций).</summary>
     public int Ver { get; set; }
 

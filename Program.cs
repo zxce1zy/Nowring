@@ -213,8 +213,11 @@ sealed class App : Application
             _updateItem.Text = Updater.ReadyPath != null ? Loc.T("Обновить до ") + v : Loc.T("Доступна версия ") + v + Loc.T(" (открыть)");
     }
 
-    void UpdateEnabledItem() =>
-        _enabledItem.Text = (_s.Enabled ? "✓  " : "     ") + Loc.T("Статус активности");
+    void UpdateEnabledItem()
+    {
+        _enabledItem.Text = Loc.T("Статус активности");
+        _enabledItem.Checked = _s.Enabled;      // галочку рисует MenuRenderer, текст остаётся на одной линии с другими пунктами
+    }
 
     // выключенный статус: иконка в трее бледная и тёмная
     void SyncIcon()
@@ -355,6 +358,17 @@ sealed class MenuRenderer : Forms.ToolStripProfessionalRenderer
     {
         e.TextColor = Hot(e.Item) ? Drawing.Color.White : Fore;
         base.OnRenderItemText(e);
+    }
+
+    protected override void OnRenderItemCheck(Forms.ToolStripItemImageRenderEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var r = e.ImageRectangle;
+        float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f;
+        using var pen = new Drawing.Pen(Hot(e.Item) ? Drawing.Color.White : Blue, 2f)
+        { StartCap = Drawing.Drawing2D.LineCap.Round, EndCap = Drawing.Drawing2D.LineCap.Round, LineJoin = Drawing.Drawing2D.LineJoin.Round };
+        g.DrawLines(pen, new[] { new Drawing.PointF(cx - 4.5f, cy + 0.5f), new Drawing.PointF(cx - 1.5f, cy + 3.5f), new Drawing.PointF(cx + 4.5f, cy - 3f) });
     }
 
     protected override void OnRenderArrow(Forms.ToolStripArrowRenderEventArgs e)

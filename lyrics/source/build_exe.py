@@ -3,6 +3,14 @@
 Как пользоваться: положите этот файл в одну папку с lyrics_overlay_v3.py и запустите
 двойным кликом (или:  python build_exe.py ). Готовый файл LyricsOverlay.exe появится рядом.
 """
+import sys
+
+for _s in (sys.stdout, sys.stderr):      # консоль CI (cp1252) не умеет кириллицу: пишем в UTF-8
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import importlib
 import os
 import shutil

@@ -3,7 +3,7 @@ rem Local build of the installer. Needs .NET 8 SDK and Inno Setup 6 (https://jrs
 setlocal
 cd /d "%~dp0.."
 if "%VER%"=="" for /f "tokens=3 delims=<>" %%a in ('findstr /c:"<Version>" Nowring.csproj') do set VER=%%a
-if "%VER%"=="" set VER=3.0.0
+if "%VER%"=="" set VER=3.1.0
 
 dotnet publish -c Release -o out -p:Version=%VER%
 if errorlevel 1 goto fail
